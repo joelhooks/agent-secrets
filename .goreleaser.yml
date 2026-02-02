@@ -24,9 +24,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/joelhooks/agent-secrets/internal/output.Version={{.Version}}
-      - -X github.com/joelhooks/agent-secrets/internal/output.Commit={{.Commit}}
-      - -X github.com/joelhooks/agent-secrets/internal/output.BuildDate={{.Date}}
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
 
 archives:
   - id: default
