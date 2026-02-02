@@ -50,15 +50,16 @@ secrets --help
 ## Quick Start
 
 ```bash
-# Initialize encrypted store (creates ~/.agent-secrets/)
+# 1. Initialize store and start daemon (one-time setup)
 secrets init
+secrets serve &          # Start daemon in background
 
-# Add secrets
+# 2. Add secrets
 secrets add github_token --rotate-via "gh auth refresh"
 secrets add anthropic_key
 echo "sk-ant-..." | secrets add openai_key
 
-# Get a lease (returns secret value, starts TTL timer)
+# 3. Get a lease (returns secret value, starts TTL timer)
 export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h)
 
 # View status
@@ -70,6 +71,8 @@ secrets audit --tail 20
 # Emergency: revoke all leases
 secrets revoke --all
 ```
+
+> **Note:** The daemon must be running for most commands to work. The install script auto-starts it, but if you see "daemon not running" errors, run `secrets serve &`.
 
 ## Architecture
 

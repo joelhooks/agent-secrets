@@ -172,9 +172,37 @@ check_path() {
     fi
 }
 
+# Initialize store and start daemon
+setup_secrets() {
+    local install_dir="$1"
+    local binary="${install_dir}/${BINARY_NAME}"
+
+    # Initialize store if not already done
+    if [[ ! -f "${HOME}/.agent-secrets/identity.age" ]]; then
+        log_json "info" "Initializing secrets store"
+        log_human "Initializing secrets store..."
+        "$binary" init >/dev/null 2>&1 || true
+    fi
+
+    # Start daemon if not running
+    if ! "$binary" status >/dev/null 2>&1; then
+        log_json "info" "Starting daemon"
+        log_human "Starting daemon..."
+        nohup "$binary" serve >/dev/null 2>&1 &
+        sleep 1
+    fi
+
+    # Verify daemon is running
+    if "$binary" status >/dev/null 2>&1; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
 # Main installation logic
 main() {
-    local platform version_installed in_path
+    local platform version_installed in_path daemon_running
 
     platform=$(detect_platform)
     log_json "info" "Detected platform: $platform"
@@ -183,6 +211,9 @@ main() {
     version_installed=$(install_binary "$platform" "$VERSION" "$INSTALL_DIR")
 
     in_path=$(check_path "$INSTALL_DIR")
+
+    # Auto-setup: init store and start daemon
+    daemon_running=$(setup_secrets "$INSTALL_DIR")
 
     # Generate output
     if [[ "$OUTPUT_MODE" == "json" ]]; then
@@ -194,14 +225,11 @@ main() {
   "data": {
     "version": "${version_installed}",
     "path": "${INSTALL_DIR}/${BINARY_NAME}",
-    "in_path": ${in_path}
+    "in_path": ${in_path},
+    "daemon_running": ${daemon_running},
+    "store_path": "${HOME}/.agent-secrets"
   },
   "actions": [
-    {
-      "name": "init",
-      "description": "Initialize secrets store",
-      "command": "secrets init"
-    },
     {
       "name": "add_secret",
       "description": "Add a secret",
@@ -211,6 +239,11 @@ main() {
       "name": "lease_secret",
       "description": "Get time-bounded lease",
       "command": "secrets lease <name> --ttl 1h"
+    },
+    {
+      "name": "status",
+      "description": "Check daemon status",
+      "command": "secrets status"
     }
 $(if [[ "$in_path" == "false" ]]; then
 cat <<INNER
@@ -228,6 +261,11 @@ EOF
         # Human-readable output
         echo ""
         echo "✓ Installed agent-secrets ${version_installed} to ${INSTALL_DIR}/${BINARY_NAME}"
+        if [[ "$daemon_running" == "true" ]]; then
+            echo "✓ Daemon running"
+        else
+            echo "⚠ Daemon not running - start with: secrets serve &"
+        fi
         echo ""
 
         if [[ "$in_path" == "false" ]]; then
@@ -238,10 +276,10 @@ EOF
             echo ""
         fi
 
-        echo "Next steps:"
-        echo "  secrets init              # Initialize encrypted store"
+        echo "Ready to use:"
         echo "  secrets add <name>        # Add a secret"
         echo "  secrets lease <name>      # Get time-bounded lease"
+        echo "  secrets status            # Check daemon status"
         echo ""
         echo "Run 'secrets --help' for more commands"
     fi
