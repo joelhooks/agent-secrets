@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"syscall"
 
+	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/joelhooks/agent-secrets/internal/update"
 	"github.com/spf13/cobra"
@@ -32,6 +36,28 @@ var updateCmd = &cobra.Command{
 			return nil
 		}
 
+		// Check if daemon is running before update
+		var daemonPID int
+		var daemonWasRunning bool
+		statusResp, err := rpcCall(socketPath, daemon.MethodStatus, nil)
+		if err == nil && statusResp.Result != nil {
+			// Daemon is running, get PID
+			if result, ok := statusResp.Result.(map[string]interface{}); ok {
+				if pid, ok := result["pid"].(float64); ok {
+					daemonPID = int(pid)
+					daemonWasRunning = true
+				}
+			}
+		}
+
+		// Stop daemon before update if it's running
+		if daemonWasRunning && daemonPID > 0 {
+			fmt.Printf("Stopping daemon (PID %d) for update...\n", daemonPID)
+			if proc, err := os.FindProcess(daemonPID); err == nil {
+				_ = proc.Signal(syscall.SIGTERM)
+			}
+		}
+
 		// Perform update
 		if err := update.DoUpdate(currentVersion); err != nil {
 			resp := output.Error(
@@ -46,11 +72,37 @@ var updateCmd = &cobra.Command{
 			return err
 		}
 
+		// Restart daemon if it was running
+		var restartMsg string
+		if daemonWasRunning {
+			// Get the path to the newly installed binary
+			execPath, err := os.Executable()
+			if err != nil {
+				execPath = "secrets" // fallback
+			}
+
+			// Start daemon in background
+			daemonCmd := exec.Command(execPath, "serve")
+			daemonCmd.Stdout = nil
+			daemonCmd.Stderr = nil
+			daemonCmd.Stdin = nil
+			// Detach from parent process
+			daemonCmd.SysProcAttr = &syscall.SysProcAttr{
+				Setpgid: true,
+			}
+			if err := daemonCmd.Start(); err != nil {
+				restartMsg = fmt.Sprintf(" (daemon restart failed: %v)", err)
+			} else {
+				restartMsg = fmt.Sprintf(" (daemon restarted, PID %d)", daemonCmd.Process.Pid)
+			}
+		}
+
 		resp := output.Success(
-			fmt.Sprintf("Updated from %s to %s", currentVersion, updateInfo.LatestVersion),
+			fmt.Sprintf("Updated from %s to %s%s", currentVersion, updateInfo.LatestVersion, restartMsg),
 			map[string]interface{}{
-				"old_version": currentVersion,
-				"new_version": updateInfo.LatestVersion,
+				"old_version":      currentVersion,
+				"new_version":      updateInfo.LatestVersion,
+				"daemon_restarted": daemonWasRunning,
 			},
 			output.Action{
 				Name:        "verify",
