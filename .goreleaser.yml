@@ -89,18 +89,19 @@ release:
     curl -LO https://github.com/joelhooks/agent-secrets/releases/download/v{{.Version}}/agent-secrets_{{.Version}}_linux_arm64.tar.gz
     ```
 
-brews:
-  - name: agent-secrets
-    repository:
-      owner: joelhooks
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    folder: Formula
-    homepage: https://github.com/joelhooks/agent-secrets
-    description: Portable credential management for AI agents
-    license: MIT
-    skip_upload: auto
-    install: |
-      bin.install "secrets"
-    test: |
-      system "#{bin}/secrets", "--help"
+# Homebrew tap (uncomment when you have a homebrew-tap repo)
+# brews:
+#   - name: agent-secrets
+#     repository:
+#       owner: joelhooks
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     directory: Formula
+#     homepage: https://github.com/joelhooks/agent-secrets
+#     description: Portable credential management for AI agents
+#     license: MIT
+#     skip_upload: auto
+#     install: |
+#       bin.install "secrets"
+#     test: |
+#       system "#{bin}/secrets", "--help"
