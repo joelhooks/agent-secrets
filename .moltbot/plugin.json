@@ -1,0 +1,58 @@
+{
+  "id": "agent-secrets",
+  "name": "Agent Secrets",
+  "version": "0.2.0",
+  "description": "Portable credential management with age encryption, session-scoped leases, and killswitch.",
+  "author": "joelhooks",
+  "repository": "https://github.com/joelhooks/agent-secrets",
+  "commands": {
+    "secrets_lease": {
+      "description": "Acquire time-bounded credential lease",
+      "usage": "secrets lease <name> [--ttl <duration>] [--client-id <id>] [--raw]",
+      "examples": [
+        "secrets lease github_token",
+        "secrets lease anthropic_key --ttl 30m --client-id moltbot-task",
+        "export TOKEN=$(secrets lease github_token --raw)"
+      ]
+    },
+    "secrets_status": {
+      "description": "Check daemon status and active leases",
+      "usage": "secrets status"
+    },
+    "secrets_revoke": {
+      "description": "Revoke lease or killswitch all",
+      "usage": "secrets revoke <lease_id> | secrets revoke --all",
+      "dangerous": true
+    },
+    "secrets_audit": {
+      "description": "View audit log",
+      "usage": "secrets audit [--tail <n>]"
+    },
+    "secrets_add": {
+      "description": "Add new secret to store",
+      "usage": "secrets add <name> [--rotate-via <cmd>]",
+      "requires_confirmation": true
+    },
+    "secrets_update": {
+      "description": "Self-update to latest version",
+      "usage": "secrets update"
+    }
+  },
+  "config": {
+    "default_ttl": {
+      "type": "string",
+      "default": "1h",
+      "description": "Default lease TTL"
+    },
+    "client_id_prefix": {
+      "type": "string",
+      "default": "moltbot",
+      "description": "Prefix for client IDs in audit"
+    }
+  },
+  "capabilities": {
+    "credential_management": true,
+    "audit_logging": true,
+    "killswitch": true
+  }
+}
