@@ -26,7 +26,7 @@ Use --background to run as a background process.`,
 		cfg := config.DefaultConfig()
 
 		// Create and start daemon
-		d, err := daemon.NewDaemon(cfg)
+		d, err := daemon.NewDaemonWithOptions(cfg, skipPermissionCheck)
 		if err != nil {
 			output.Print(output.Error(fmt.Errorf("failed to create daemon: %w", err)))
 			return err

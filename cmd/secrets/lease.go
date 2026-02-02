@@ -8,6 +8,7 @@ import (
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
+	"github.com/joelhooks/agent-secrets/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -52,6 +53,17 @@ Examples:
 
 		resp, err := rpcCall(socketPath, daemon.MethodLease, params)
 		if err != nil {
+			// Check if this is a daemon connection error
+			if isDaemonConnectionError(err) {
+				userErr := types.NewUserError(
+					"Failed to connect to daemon",
+					"The daemon doesn't appear to be running. Without the daemon, secrets cannot be leased.",
+					"To start it:\n  secrets serve &",
+					"secrets --help",
+				).WithContext("Socket path", socketPath)
+				output.Print(output.Error(userErr))
+				return nil
+			}
 			output.Print(output.Error(fmt.Errorf("failed to acquire lease: %w", err)))
 			return nil
 		}
