@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVar(&output.HumanMode, "human", false, "Human-readable output (default: JSON)")
 	rootCmd.PersistentFlags().StringVar(&socketPath, "socket", "", "Override Unix socket path")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Override config file path")
 
@@ -29,6 +31,8 @@ func init() {
 	rootCmd.AddCommand(revokeCmd)
 	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(updateCmd)
 }
 
 func Execute() {

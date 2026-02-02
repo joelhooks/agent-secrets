@@ -3,11 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"text/tabwriter"
-	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
+	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +15,9 @@ var auditCmd = &cobra.Command{
 	Use:   "audit",
 	Short: "View audit log entries",
 	Long: `Display audit log entries showing all operations performed on secrets and leases.
-Use --tail to limit the number of entries shown.`,
+Use --tail to limit the number of entries shown.
+
+The response includes suggested filtering actions to help narrow down results.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		params := daemon.AuditParams{
 			Tail: auditTail,
@@ -25,55 +25,58 @@ Use --tail to limit the number of entries shown.`,
 
 		resp, err := rpcCall(socketPath, daemon.MethodAudit, params)
 		if err != nil {
-			return fmt.Errorf("failed to fetch audit log: %w", err)
+			output.Print(output.Error(fmt.Errorf("failed to fetch audit log: %w", err)))
+			return nil
 		}
 
 		var result daemon.AuditResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			return nil
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			return fmt.Errorf("failed to parse result: %w", err)
-		}
-
-		if len(result.Entries) == 0 {
-			fmt.Println("No audit entries found.")
+			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
 			return nil
 		}
 
-		// Pretty-print audit entries in a table
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TIMESTAMP\tACTION\tSUCCESS\tSECRET\tCLIENT\tDETAILS")
-		fmt.Fprintln(w, "─────────\t──────\t───────\t──────\t──────\t───────")
-
-		for _, entry := range result.Entries {
-			timestamp := entry.Timestamp.Format(time.RFC3339)
-			success := "✓"
-			if !entry.Success {
-				success = "✗"
-			}
-
-			secretName := entry.SecretName
-			if secretName == "" {
-				secretName = "-"
-			}
-
-			clientID := entry.ClientID
-			if clientID == "" {
-				clientID = "-"
-			}
-
-			details := entry.Details
-			if details == "" {
-				details = "-"
-			}
-
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				timestamp, entry.Action, success, secretName, clientID, details)
+		if len(result.Entries) == 0 {
+			output.Print(output.Success("No audit entries found", nil))
+			return nil
 		}
 
-		w.Flush()
+		// Convert entries to array of maps for JSON output
+		entries := make([]map[string]interface{}, len(result.Entries))
+		for i, entry := range result.Entries {
+			entries[i] = map[string]interface{}{
+				"timestamp":   entry.Timestamp,
+				"action":      entry.Action,
+				"success":     entry.Success,
+				"secret_name": entry.SecretName,
+				"client_id":   entry.ClientID,
+				"details":     entry.Details,
+			}
+		}
+
+		auditData := map[string]interface{}{
+			"entries":       entries,
+			"total_shown":   len(entries),
+			"tail_limit":    auditTail,
+		}
+
+		// Suggest filtering actions
+		actions := []output.Action{
+			output.ActionAuditTail(10),
+			output.ActionAuditTail(100),
+			{
+				Name:        "audit_all",
+				Description: "Show all audit entries",
+				Command:     "secrets audit --tail 0",
+			},
+			output.ActionStatus(),
+		}
+
+		output.Print(output.Success("Audit log retrieved", auditData, actions...))
 		return nil
 	},
 }

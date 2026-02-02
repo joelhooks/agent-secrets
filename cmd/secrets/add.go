@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
+	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -67,25 +68,37 @@ var addCmd = &cobra.Command{
 
 		resp, err := rpcCall(socketPath, daemon.MethodAdd, params)
 		if err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to add secret: %w", err)))
 			return fmt.Errorf("failed to add secret: %w", err)
 		}
 
 		var result daemon.AddResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
 			return fmt.Errorf("failed to parse result: %w", err)
 		}
 
 		if result.Success {
-			fmt.Printf("✓ Secret '%s' added successfully", name)
+			msg := fmt.Sprintf("Secret '%s' added successfully", name)
 			if addRotateVia != "" {
-				fmt.Printf(" with rotation via: %s", addRotateVia)
+				msg += fmt.Sprintf(" with rotation via: %s", addRotateVia)
 			}
-			fmt.Println()
+
+			output.Print(output.Success(
+				msg,
+				map[string]interface{}{
+					"name":       name,
+					"rotate_via": addRotateVia,
+				},
+				output.ActionsAfterAdd(name)...,
+			))
 		} else {
+			output.Print(output.ErrorMsg(result.Message))
 			return fmt.Errorf("failed to add secret: %s", result.Message)
 		}
 

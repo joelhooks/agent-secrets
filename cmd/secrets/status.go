@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
+	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/joelhooks/agent-secrets/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -17,38 +18,65 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resp, err := rpcCall(socketPath, daemon.MethodStatus, daemon.StatusParams{})
 		if err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to get status: %w", err)))
 			return fmt.Errorf("failed to get status: %w", err)
 		}
 
 		var result types.DaemonStatus
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
+			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
 			return fmt.Errorf("failed to parse result: %w", err)
 		}
 
-		// Pretty-print status
-		fmt.Println("Agent Secrets Daemon Status")
-		fmt.Println("═══════════════════════════")
-		fmt.Printf("\nRunning:        %v\n", formatBool(result.Running))
+		// Build data map for JSON response
+		statusData := map[string]interface{}{
+			"running":       result.Running,
+			"secrets_count": result.SecretsCount,
+			"active_leases": result.ActiveLeases,
+		}
 
 		if result.Running {
 			uptime := time.Since(result.StartedAt)
-			fmt.Printf("Started at:     %s\n", result.StartedAt.Format(time.RFC3339))
-			fmt.Printf("Uptime:         %s\n", formatDuration(uptime))
-			fmt.Printf("Secrets:        %d\n", result.SecretsCount)
-			fmt.Printf("Active Leases:  %d\n", result.ActiveLeases)
+			statusData["started_at"] = result.StartedAt.Format(time.RFC3339)
+			statusData["uptime"] = formatDuration(uptime)
 
 			if result.Heartbeat != nil && result.Heartbeat.Enabled {
-				fmt.Printf("\nHeartbeat:      enabled\n")
-				fmt.Printf("  URL:          %s\n", result.Heartbeat.URL)
-				fmt.Printf("  Interval:     %s\n", result.Heartbeat.Interval)
+				statusData["heartbeat"] = map[string]interface{}{
+					"enabled":  true,
+					"url":      result.Heartbeat.URL,
+					"interval": result.Heartbeat.Interval,
+				}
 			} else {
-				fmt.Printf("\nHeartbeat:      disabled\n")
+				statusData["heartbeat"] = map[string]interface{}{
+					"enabled": false,
+				}
 			}
 		}
+
+		// Build contextual actions
+		var actions []output.Action
+		if result.SecretsCount > 0 {
+			// TODO: Get actual secret names from daemon to suggest specific leases
+			actions = append(actions,
+				output.ActionLease(""),
+				output.ActionAdd(""),
+				output.ActionAudit(),
+			)
+		} else {
+			// No secrets exist, suggest adding
+			actions = output.ActionsWhenEmpty()
+		}
+
+		output.Print(output.Success(
+			"Daemon status retrieved",
+			statusData,
+			actions...,
+		))
 
 		return nil
 	},
