@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/joelhooks/agent-secrets/internal/types"
 )
 
 // Action represents a possible next action (HATEOAS-style)
@@ -20,12 +22,13 @@ type Action struct {
 
 // Response is the standard CLI response format
 type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Actions []Action    `json:"actions,omitempty"`
-	Update  *UpdateInfo `json:"update,omitempty"`
+	Success  bool        `json:"success"`
+	Message  string      `json:"message,omitempty"`
+	Data     interface{} `json:"data,omitempty"`
+	Error    string      `json:"error,omitempty"`
+	ExitCode int         `json:"exit_code,omitempty"`
+	Actions  []Action    `json:"actions,omitempty"`
+	Update   *UpdateInfo `json:"update,omitempty"`
 }
 
 // UpdateInfo contains version update information
@@ -36,8 +39,11 @@ type UpdateInfo struct {
 	Command        string `json:"command,omitempty"`
 }
 
-// Global flag for human-readable output
-var HumanMode bool
+// Global flags for output modes
+var (
+	HumanMode    bool   // Deprecated: use OutputFormat instead
+	OutputFormat string // json, table, or raw
+)
 
 // Version info (set by ldflags)
 var (
@@ -45,11 +51,21 @@ var (
 	Commit  = "unknown"
 )
 
-// Print outputs the response in JSON (default) or human-readable format
+// Print outputs the response using the configured formatter
 func Print(r Response) {
+	// Handle legacy HumanMode flag for backwards compatibility
+	var mode OutputMode
 	if HumanMode {
-		printHuman(r)
-	} else {
+		mode = ModeTable
+	} else if OutputFormat != "" {
+		mode = OutputMode(OutputFormat)
+	}
+	// If neither flag is set, GetFormatter will auto-detect
+
+	formatter := GetFormatter(mode)
+	if err := formatter.Format(r); err != nil {
+		// Fallback to simple error print if formatting fails
+		fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 		printJSON(r)
 	}
 }
@@ -64,28 +80,69 @@ func Success(message string, data interface{}, actions ...Action) Response {
 	}
 }
 
-// Error creates an error response
+// Error creates an error response with appropriate exit code
 func Error(err error, actions ...Action) Response {
 	return Response{
-		Success: false,
-		Error:   err.Error(),
-		Actions: actions,
+		Success:  false,
+		Error:    err.Error(),
+		ExitCode: types.ExitCodeFromError(err),
+		Actions:  actions,
 	}
 }
 
 // ErrorMsg creates an error response from a string
 func ErrorMsg(msg string, actions ...Action) Response {
 	return Response{
-		Success: false,
-		Error:   msg,
-		Actions: actions,
+		Success:  false,
+		Error:    msg,
+		ExitCode: types.ExitGenericError,
+		Actions:  actions,
 	}
 }
 
-func printJSON(r Response) {
+// ErrorWithCode creates an error response with a specific exit code
+func ErrorWithCode(err error, exitCode int, actions ...Action) Response {
+	return Response{
+		Success:  false,
+		Error:    err.Error(),
+		ExitCode: exitCode,
+		Actions:  actions,
+	}
+}
+
+// ErrorMsgWithCode creates an error response from a string with specific exit code
+func ErrorMsgWithCode(msg string, exitCode int, actions ...Action) Response {
+	return Response{
+		Success:  false,
+		Error:    msg,
+		ExitCode: exitCode,
+		Actions:  actions,
+	}
+}
+
+// Fatal prints an error response and exits with the appropriate exit code
+func Fatal(r Response) {
+	Print(r)
+	if r.ExitCode != 0 {
+		os.Exit(r.ExitCode)
+	}
+	os.Exit(types.ExitGenericError)
+}
+
+// FatalError prints an error and exits with the appropriate exit code
+func FatalError(err error, actions ...Action) {
+	Fatal(Error(err, actions...))
+}
+
+// FatalMsg prints an error message and exits with generic error code
+func FatalMsg(msg string, actions ...Action) {
+	Fatal(ErrorMsg(msg, actions...))
+}
+
+func printJSON(r Response) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(r)
+	return enc.Encode(r)
 }
 
 func printHuman(r Response) {

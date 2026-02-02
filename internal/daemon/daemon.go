@@ -42,6 +42,11 @@ type Daemon struct {
 // NewDaemon creates a new daemon with the provided configuration.
 // It initializes all components (store, lease manager, rotation executor, etc.).
 func NewDaemon(cfg *config.Config) (*Daemon, error) {
+	return NewDaemonWithOptions(cfg, false)
+}
+
+// NewDaemonWithOptions creates a new daemon with additional options.
+func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -57,8 +62,8 @@ func NewDaemon(cfg *config.Config) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to create audit logger: %w", err)
 	}
 
-	// Initialize store
-	st := store.New(cfg)
+	// Initialize store with optional permission check skip
+	st := store.NewWithOptions(cfg, skipPermissionCheck)
 	if err := st.Load(); err != nil {
 		// If load fails, try to init
 		if err := st.Init(); err != nil {
@@ -216,6 +221,16 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	defer d.wg.Done()
 	defer conn.Close()
 
+	// Set a read deadline to prevent indefinite blocking
+	// Use 10s for server-side to be more generous than client default
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		entry := audit.NewEntry(types.ActionDaemonStop, false).
+			WithDetails(fmt.Sprintf("failed to set read deadline: %v", err)).
+			Build()
+		_ = d.auditLogger.Log(entry)
+		return
+	}
+
 	scanner := bufio.NewScanner(conn)
 	encoder := json.NewEncoder(conn)
 
@@ -225,6 +240,11 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 		case <-d.done:
 			return
 		default:
+		}
+
+		// Reset read deadline after each successful read
+		if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			return
 		}
 
 		// Parse JSON-RPC request
@@ -256,6 +276,11 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 			}
 		}
 
+		// Set write deadline for response
+		if err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			return
+		}
+
 		// Write response
 		if err := encoder.Encode(resp); err != nil {
 			// Connection error, close and return
@@ -264,7 +289,12 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		// Log connection error
+		// Check if it's a timeout error - these are expected
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			// Silent timeout - client probably closed connection
+			return
+		}
+		// Log other connection errors
 		entry := audit.NewEntry(types.ActionDaemonStop, false).
 			WithDetails(fmt.Sprintf("connection error: %v", err)).
 			Build()

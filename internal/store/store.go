@@ -15,7 +15,7 @@ import (
 
 // storeData represents the JSON structure stored in the encrypted file.
 type storeData struct {
-	Version int                        `json:"version"`
+	Version int                         `json:"version"`
 	Secrets map[string]*secretWithValue `json:"secrets"`
 }
 
@@ -27,17 +27,28 @@ type secretWithValue struct {
 
 // Store manages encrypted secret storage using Age encryption.
 type Store struct {
-	mu       sync.RWMutex
-	identity *age.X25519Identity
-	secrets  map[string]*secretWithValue
-	cfg      *config.Config
+	mu                  sync.RWMutex
+	identity            *age.X25519Identity
+	secrets             map[string]*secretWithValue
+	cfg                 *config.Config
+	skipPermissionCheck bool
 }
 
 // New creates a new Store instance with the provided configuration.
 func New(cfg *config.Config) *Store {
 	return &Store{
-		cfg:     cfg,
-		secrets: make(map[string]*secretWithValue),
+		cfg:                 cfg,
+		secrets:             make(map[string]*secretWithValue),
+		skipPermissionCheck: false,
+	}
+}
+
+// NewWithOptions creates a new Store instance with additional options.
+func NewWithOptions(cfg *config.Config, skipPermissionCheck bool) *Store {
+	return &Store{
+		cfg:                 cfg,
+		secrets:             make(map[string]*secretWithValue),
+		skipPermissionCheck: skipPermissionCheck,
 	}
 }
 
@@ -83,9 +94,15 @@ func (s *Store) Init() error {
 }
 
 // Load loads the identity and decrypts the secrets file.
+// It validates file permissions on startup unless skipPermissionCheck is set.
 func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Validate key file permissions before loading (respects skipPermissionCheck field)
+	if err := ValidateAllKeyFiles(s.cfg.IdentityPath, s.cfg.SecretsPath, s.skipPermissionCheck); err != nil {
+		return err
+	}
 
 	// Load identity
 	identity, err := LoadIdentity(s.cfg.IdentityPath)

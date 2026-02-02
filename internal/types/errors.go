@@ -133,6 +133,65 @@ func (e ErrAdapterNotAvailable) Unwrap() error {
 	return ErrAdapterFailed
 }
 
+// UserError provides structured, user-friendly error messages with actionable suggestions.
+// Pattern: What went wrong + Why it matters + How to fix + Help reference
+type UserError struct {
+	What       string            // What went wrong (brief, technical summary)
+	Why        string            // Why it matters (user impact)
+	Suggestion string            // How to fix it (actionable next step)
+	HelpRef    string            // Reference to help docs or command
+	Context    map[string]string // Additional contextual details (e.g., socket path, secret name)
+}
+
+func (e *UserError) Error() string {
+	var msg string
+
+	// What went wrong
+	msg = fmt.Sprintf("Error: %s\n", e.What)
+
+	// Context details (if any)
+	if len(e.Context) > 0 {
+		for key, value := range e.Context {
+			msg += fmt.Sprintf("  %s: %s\n", key, value)
+		}
+		msg += "\n"
+	}
+
+	// Why it matters
+	if e.Why != "" {
+		msg += fmt.Sprintf("%s\n\n", e.Why)
+	}
+
+	// How to fix
+	if e.Suggestion != "" {
+		msg += fmt.Sprintf("%s\n\n", e.Suggestion)
+	}
+
+	// Help reference
+	if e.HelpRef != "" {
+		msg += fmt.Sprintf("See '%s' for more information.\n", e.HelpRef)
+	}
+
+	return msg
+}
+
+// NewUserError creates a new UserError with the given details.
+func NewUserError(what, why, suggestion, helpRef string) *UserError {
+	return &UserError{
+		What:       what,
+		Why:        why,
+		Suggestion: suggestion,
+		HelpRef:    helpRef,
+		Context:    make(map[string]string),
+	}
+}
+
+// WithContext adds contextual key-value pairs to the error.
+func (e *UserError) WithContext(key, value string) *UserError {
+	e.Context[key] = value
+	return e
+}
+
 // RPCErrorFromError converts a Go error to an RPCError with appropriate code.
 func RPCErrorFromError(err error) *RPCError {
 	code := RPCInternalError

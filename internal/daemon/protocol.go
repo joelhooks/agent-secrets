@@ -16,6 +16,7 @@ const (
 	MethodRotate    = "secrets.rotate"
 	MethodAudit     = "secrets.audit"
 	MethodStatus    = "secrets.status"
+	MethodHealth    = "secrets.health"
 )
 
 // InitParams are parameters for secrets.init
@@ -109,9 +110,9 @@ type RevokeAllParams struct {
 
 // RevokeAllResult is the result of secrets.revokeAll
 type RevokeAllResult struct {
-	Success        bool   `json:"success"`
-	LeasesRevoked  int    `json:"leases_revoked"`
-	Message        string `json:"message"`
+	Success       bool   `json:"success"`
+	LeasesRevoked int    `json:"leases_revoked"`
+	Message       string `json:"message"`
 }
 
 // RotateParams are parameters for secrets.rotate
@@ -154,3 +155,28 @@ type StatusParams struct {
 }
 
 // StatusResult is the result of secrets.status (uses types.DaemonStatus)
+
+// HealthParams are parameters for secrets.health
+type HealthParams struct {
+	// No parameters needed
+}
+
+// HealthResult is the result of secrets.health
+type HealthResult struct {
+	TotalSecrets int             `json:"total_secrets"`
+	ActiveLeases int             `json:"active_leases"`
+	ExpiringSoon int             `json:"expiring_soon"`
+	NeverRotated int             `json:"never_rotated"`
+	StaleSecrets int             `json:"stale_secrets"`
+	Warnings     []HealthWarning `json:"warnings"`
+}
+
+// HealthWarning represents a health check warning
+type HealthWarning struct {
+	Type       string    `json:"type"`
+	SecretName string    `json:"secret_name,omitempty"`
+	LeaseID    string    `json:"lease_id,omitempty"`
+	Message    string    `json:"message"`
+	Severity   string    `json:"severity"`
+	Timestamp  time.Time `json:"timestamp,omitempty"`
+}

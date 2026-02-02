@@ -18,6 +18,17 @@ var statusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resp, err := rpcCall(socketPath, daemon.MethodStatus, daemon.StatusParams{})
 		if err != nil {
+			// Check if this is a daemon connection error
+			if isDaemonConnectionError(err) {
+				userErr := types.NewUserError(
+					"Failed to connect to daemon",
+					"The daemon doesn't appear to be running. Without the daemon, status cannot be retrieved.",
+					"To start it:\n  secrets serve &",
+					"secrets --help",
+				).WithContext("Socket path", socketPath)
+				output.Print(output.Error(userErr))
+				return userErr
+			}
 			output.Print(output.Error(fmt.Errorf("failed to get status: %w", err)))
 			return fmt.Errorf("failed to get status: %w", err)
 		}

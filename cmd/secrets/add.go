@@ -10,6 +10,7 @@ import (
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
+	"github.com/joelhooks/agent-secrets/internal/types"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -68,6 +69,17 @@ var addCmd = &cobra.Command{
 
 		resp, err := rpcCall(socketPath, daemon.MethodAdd, params)
 		if err != nil {
+			// Check if this is a daemon connection error
+			if isDaemonConnectionError(err) {
+				userErr := types.NewUserError(
+					"Failed to connect to daemon",
+					"The daemon doesn't appear to be running. Without the daemon, secrets cannot be added.",
+					"To start it:\n  secrets serve &",
+					"secrets --help",
+				).WithContext("Socket path", socketPath)
+				output.Print(output.Error(userErr))
+				return userErr
+			}
 			output.Print(output.Error(fmt.Errorf("failed to add secret: %w", err)))
 			return fmt.Errorf("failed to add secret: %w", err)
 		}

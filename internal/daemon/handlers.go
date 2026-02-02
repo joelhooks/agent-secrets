@@ -118,6 +118,13 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 		} else {
 			resp.Result = result
 		}
+	case MethodHealth:
+		result, err := h.handleHealth()
+		if err != nil {
+			resp.Error = types.RPCErrorFromError(err)
+		} else {
+			resp.Result = result
+		}
 	default:
 		resp.Error = &types.RPCError{
 			Code:    types.RPCMethodNotFound,
@@ -383,6 +390,117 @@ func (h *Handler) handleStatus() (*types.DaemonStatus, error) {
 		SecretsCount: len(secrets),
 		ActiveLeases: len(activeLeases),
 	}, nil
+}
+
+// handleHealth generates a comprehensive health report.
+func (h *Handler) handleHealth() (*HealthResult, error) {
+	secrets, err := h.store.List()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secrets: %w", err)
+	}
+
+	activeLeases := h.leaseManager.List()
+
+	result := &HealthResult{
+		TotalSecrets: len(secrets),
+		ActiveLeases: len(activeLeases),
+		Warnings:     []HealthWarning{},
+	}
+
+	now := time.Now()
+	expiryThreshold := now.Add(1 * time.Hour)
+	staleThreshold := now.Add(-30 * 24 * time.Hour) // 30 days ago
+
+	// Check for expiring leases
+	for _, lease := range activeLeases {
+		if !lease.Revoked && lease.ExpiresAt.Before(expiryThreshold) && lease.ExpiresAt.After(now) {
+			result.ExpiringSoon++
+			timeUntilExpiry := time.Until(lease.ExpiresAt)
+			result.Warnings = append(result.Warnings, HealthWarning{
+				Type:       "expiring_soon",
+				SecretName: lease.SecretName,
+				LeaseID:    lease.ID,
+				Message:    fmt.Sprintf("Lease expires in %s", formatDuration(timeUntilExpiry)),
+				Severity:   "warning",
+				Timestamp:  lease.ExpiresAt,
+			})
+		}
+	}
+
+	// Track last access per secret from audit log
+	secretLastAccess := make(map[string]time.Time)
+	auditEntries, err := h.auditLogger.Tail(1000) // Check last 1000 entries
+	if err == nil {
+		for _, entry := range auditEntries {
+			if entry.Action == types.ActionLeaseAcquire && entry.Success {
+				if lastAccess, exists := secretLastAccess[entry.SecretName]; !exists || entry.Timestamp.After(lastAccess) {
+					secretLastAccess[entry.SecretName] = entry.Timestamp
+				}
+			}
+		}
+	}
+
+	// Check secrets for health issues
+	for _, secret := range secrets {
+		// Check if rotation hook is missing
+		if secret.RotateVia == "" {
+			result.NeverRotated++
+			result.Warnings = append(result.Warnings, HealthWarning{
+				Type:       "no_rotation_hook",
+				SecretName: secret.Name,
+				Message:    "No rotation hook configured",
+				Severity:   "info",
+			})
+		}
+
+		// Check for stale secrets (not accessed in 30 days)
+		if lastAccess, exists := secretLastAccess[secret.Name]; exists {
+			if lastAccess.Before(staleThreshold) {
+				result.StaleSecrets++
+				daysSinceAccess := int(now.Sub(lastAccess).Hours() / 24)
+				result.Warnings = append(result.Warnings, HealthWarning{
+					Type:       "stale_secret",
+					SecretName: secret.Name,
+					Message:    fmt.Sprintf("Not accessed in %d days", daysSinceAccess),
+					Severity:   "info",
+					Timestamp:  lastAccess,
+				})
+			}
+		} else {
+			// Never accessed
+			daysSinceCreation := int(now.Sub(secret.CreatedAt).Hours() / 24)
+			if daysSinceCreation > 30 {
+				result.StaleSecrets++
+				result.Warnings = append(result.Warnings, HealthWarning{
+					Type:       "never_accessed",
+					SecretName: secret.Name,
+					Message:    fmt.Sprintf("Never accessed (created %d days ago)", daysSinceCreation),
+					Severity:   "info",
+					Timestamp:  secret.CreatedAt,
+				})
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// formatDuration formats a duration for human-readable output.
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.0fs", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.0fm", d.Minutes())
+	}
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	if hours < 24 {
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+	days := hours / 24
+	hours = hours % 24
+	return fmt.Sprintf("%dd%dh", days, hours)
 }
 
 // unmarshalParams is a helper to unmarshal interface{} params to a specific type.
