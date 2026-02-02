@@ -46,6 +46,9 @@ var (
 
 	// Audit errors
 	ErrAuditWriteFailed   = errors.New("failed to write audit entry")
+
+	// Adapter errors
+	ErrAdapterFailed      = errors.New("adapter operation failed")
 )
 
 // SecretError wraps an error with the secret name for context.
@@ -114,6 +117,20 @@ func NewRotationError(secretName, command, output string, err error) *RotationEr
 		Output:     output,
 		Err:        err,
 	}
+}
+
+// ErrAdapterNotAvailable indicates an adapter cannot be used.
+type ErrAdapterNotAvailable struct {
+	Adapter string
+	Reason  string
+}
+
+func (e ErrAdapterNotAvailable) Error() string {
+	return fmt.Sprintf("adapter %q not available: %s", e.Adapter, e.Reason)
+}
+
+func (e ErrAdapterNotAvailable) Unwrap() error {
+	return ErrAdapterFailed
 }
 
 // RPCErrorFromError converts a Go error to an RPCError with appropriate code.

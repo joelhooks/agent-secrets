@@ -67,6 +67,9 @@ agent-secrets/
 | `secrets revoke --all` | KILLSWITCH: revoke all leases |
 | `secrets status` | Show daemon status and active leases |
 | `secrets audit` | View append-only audit log |
+| `secrets env` | Generate .env file from .secrets.json config |
+| `secrets exec -- <cmd>` | Run command with secrets loaded, auto-cleanup |
+| `secrets cleanup` | Remove expired lease environment files |
 
 ## Development
 
@@ -121,14 +124,63 @@ goreleaser check
 goreleaser build --snapshot --clean
 ```
 
+## Agent Workflows
+
+### Quick Workflow (Single Secret)
+```bash
+# 1. Lease credential
+export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "task-123")
+
+# 2. Do work
+git push origin main
+
+# 3. Cleanup
+secrets revoke --all
+```
+
+### Project Workflow (.secrets.json)
+```bash
+# 1. Create .secrets.json in project
+cat > .secrets.json <<'EOF'
+{
+  "secrets": [
+    {"name": "github_token", "env_var": "GITHUB_TOKEN"},
+    {"name": "vercel_token", "env_var": "VERCEL_TOKEN", "ttl": "30m"}
+  ],
+  "client_id": "deploy-task"
+}
+EOF
+
+# 2. Generate .env
+secrets env
+
+# 3. Work (credentials auto-loaded from .env)
+source .env
+npm run deploy
+
+# 4. Cleanup
+secrets cleanup
+```
+
+### One-Shot Execution (Recommended for Agents)
+```bash
+# Auto-load secrets, run command, auto-cleanup
+secrets exec -- npm run deploy
+secrets exec -- pytest tests/
+secrets exec -- ./deploy.sh production
+```
+
 ## Agent Integration Points
 
 ### For agents using this tool:
 
 1. **Check if installed:** `which secrets || echo "Not installed"`
 2. **Initialize if needed:** `secrets init`
-3. **Lease credentials:** `export TOKEN=$(secrets lease github_token --ttl 1h --client-id "agent-task-123")`
-4. **Revoke when done:** `secrets revoke --all`
+3. **Choose workflow:**
+   - Single secret → `secrets lease <name>`
+   - Multiple secrets → create `.secrets.json` + `secrets env`
+   - One-shot command → `secrets exec -- <command>`
+4. **Revoke when done:** `secrets cleanup` or `secrets revoke --all`
 
 ### For agents modifying this repo:
 

@@ -31,6 +31,10 @@ func init() {
 	rootCmd.AddCommand(revokeCmd)
 	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(scanCmd)
+	rootCmd.AddCommand(cleanupCmd)
+	rootCmd.AddCommand(envCmd)
+	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(updateCmd)
 }

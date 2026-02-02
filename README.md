@@ -161,6 +161,85 @@ secrets status
 # Active Leases: 2
 ```
 
+### `secrets env`
+Generate `.env` file from `.secrets.json` config. Perfect for agentic workflows where secrets need to be loaded into a project environment.
+
+```bash
+# Generate .env from .secrets.json in current directory
+secrets env
+
+# Force overwrite existing .env
+secrets env --force
+```
+
+**How it works:**
+1. Reads `.secrets.json` from current directory
+2. Acquires leases for each secret listed
+3. Writes `KEY=value` pairs to `.env` file
+4. Sets restrictive permissions (0600)
+
+**Example `.secrets.json`:**
+```json
+{
+  "secrets": [
+    {
+      "name": "github_token",
+      "env_var": "GITHUB_TOKEN"
+    },
+    {
+      "name": "anthropic_key",
+      "env_var": "ANTHROPIC_API_KEY"
+    },
+    {
+      "name": "openai_key",
+      "env_var": "OPENAI_API_KEY",
+      "ttl": "30m"
+    }
+  ],
+  "client_id": "my-project"
+}
+```
+
+**Schema:**
+- `secrets` (required): Array of secret mappings
+  - `name` (required): Secret name in agent-secrets store
+  - `env_var` (required): Environment variable name for .env file
+  - `ttl` (optional): Custom TTL for this secret (default: 1h)
+- `client_id` (optional): Custom client ID for audit trail (default: auto-generated)
+
+### `secrets exec`
+Run a command with secrets loaded as environment variables. Combines `secrets env` + command execution + automatic cleanup.
+
+```bash
+# Run command with secrets loaded
+secrets exec -- npm run dev
+
+# Run tests with credentials
+secrets exec -- pytest tests/
+
+# Execute shell script
+secrets exec -- ./deploy.sh
+
+# Chain multiple commands
+secrets exec -- sh -c "npm install && npm test"
+```
+
+**What it does:**
+1. Generates temporary `.env` file from `.secrets.json`
+2. Executes command with environment loaded
+3. Cleans up `.env` file when command exits (even on error)
+
+### `secrets cleanup`
+Remove expired lease environment files. Run this to clean up stale `.env` files when leases have expired.
+
+```bash
+# Remove all expired .env files
+secrets cleanup
+
+# Check what would be cleaned (dry-run)
+secrets cleanup --dry-run
+```
+
 ## Security Model
 
 ### Encryption
@@ -216,8 +295,9 @@ Once the CLI is installed globally (`secrets` in PATH), any AI agent with shell 
 
 ### Any Agent (Direct CLI)
 
-Works out of the box with any agent that can run shell commands:
+Works out of the box with any agent that can run shell commands.
 
+**Option 1: Direct lease (single secret)**
 ```bash
 # Lease credentials for a task
 export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "claude-refactor-123")
@@ -230,10 +310,45 @@ secrets status
 secrets revoke --all
 ```
 
+**Option 2: Project-based workflow (.secrets.json)**
+```bash
+# 1. Create .secrets.json in project root
+cat > .secrets.json <<'EOF'
+{
+  "secrets": [
+    {"name": "github_token", "env_var": "GITHUB_TOKEN"},
+    {"name": "anthropic_key", "env_var": "ANTHROPIC_API_KEY"},
+    {"name": "vercel_token", "env_var": "VERCEL_TOKEN", "ttl": "30m"}
+  ],
+  "client_id": "project-deploy-task"
+}
+EOF
+
+# 2. Generate .env with all secrets
+secrets env
+
+# 3. Work with credentials loaded
+source .env
+npm run deploy
+
+# 4. Cleanup when done
+secrets cleanup
+```
+
+**Option 3: One-shot execution**
+```bash
+# Run command with secrets, auto-cleanup
+secrets exec -- npm run deploy
+secrets exec -- pytest tests/integration
+secrets exec -- ./scripts/sync-prod.sh
+```
+
 **Best practices:**
 - Use descriptive `--client-id` values (task name, agent ID)
 - Match TTL to expected task duration
 - Revoke leases when task completes or errors
+- Use `secrets exec` for one-shot commands (auto-cleanup)
+- Use `.secrets.json` for multi-secret workflows
 
 ---
 

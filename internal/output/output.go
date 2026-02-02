@@ -300,3 +300,113 @@ func BuildEnvExport(varName, value string) string {
 	escaped := strings.ReplaceAll(value, "'", "'\\''")
 	return fmt.Sprintf("export %s='%s'", varName, escaped)
 }
+
+// ActionScan suggests running a scan to find hardcoded secrets
+func ActionScan() Action {
+	return Action{
+		Name:        "scan",
+		Description: "Scan for hardcoded secrets in your repository",
+		Command:     "secrets scan",
+	}
+}
+
+// ActionScanPath suggests scanning a specific path
+func ActionScanPath(path string) Action {
+	cmd := "secrets scan <path>"
+	if path != "" {
+		cmd = fmt.Sprintf("secrets scan %s", path)
+	}
+	return Action{
+		Name:        "scan_path",
+		Description: fmt.Sprintf("Scan %s for hardcoded secrets", path),
+		Command:     cmd,
+	}
+}
+
+// ActionImportSecret suggests importing a found secret to the secrets store
+func ActionImportSecret(name, envFile string) Action {
+	var cmd string
+	if envFile != "" {
+		cmd = fmt.Sprintf("secrets add %s --from-env %s", name, envFile)
+	} else {
+		cmd = fmt.Sprintf("secrets add %s", name)
+	}
+
+	desc := fmt.Sprintf("Import %s into secrets store", name)
+	if envFile != "" {
+		desc = fmt.Sprintf("Import %s from %s", name, envFile)
+	}
+
+	return Action{
+		Name:        "import_secret",
+		Description: desc,
+		Command:     cmd,
+	}
+}
+
+// ActionsAfterScan returns contextual actions after scan completes
+func ActionsAfterScan(count int) []Action {
+	if count == 0 {
+		return []Action{
+			ActionScanPath(""),
+			ActionAdd(""),
+		}
+	}
+
+	// When secrets are found, suggest import and rotation
+	return []Action{
+		ActionImportSecret("", ""),
+		ActionAddWithRotation(),
+		ActionAudit(),
+	}
+}
+
+// ActionEnv suggests generating .env file from secrets
+func ActionEnv() Action {
+	return Action{
+		Name:        "env",
+		Description: "Generate .env file from .secrets.json config",
+		Command:     "secrets env",
+	}
+}
+
+// ActionEnvForce suggests force-overwriting existing .env file
+func ActionEnvForce() Action {
+	return Action{
+		Name:        "env_force",
+		Description: "Force overwrite existing .env file",
+		Command:     "secrets env --force",
+		Dangerous:   true,
+	}
+}
+
+// ActionExec suggests running a command with secrets loaded
+func ActionExec(cmd string) Action {
+	command := "secrets exec -- <command>"
+	if cmd != "" {
+		command = fmt.Sprintf("secrets exec -- %s", cmd)
+	}
+	return Action{
+		Name:        "exec",
+		Description: "Run command with secrets as environment variables",
+		Command:     command,
+	}
+}
+
+// ActionCleanup suggests removing expired lease env files
+func ActionCleanup() Action {
+	return Action{
+		Name:        "cleanup",
+		Description: "Remove expired lease environment files",
+		Command:     "secrets cleanup",
+	}
+}
+
+// ActionsAfterEnv returns suggested actions after env file generation
+func ActionsAfterEnv(envFile string) []Action {
+	return []Action{
+		ActionExec(""),
+		ActionCleanup(),
+		ActionStatus(),
+	}
+}
