@@ -11,14 +11,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/output"
 )
 
 const (
-	repoOwner = "joelhooks"
-	repoName  = "agent-secrets"
-	apiURL    = "https://api.github.com/repos/joelhooks/agent-secrets/releases/latest"
+	repoOwner              = "joelhooks"
+	repoName               = "agent-secrets"
+	apiURL                 = "https://api.github.com/repos/joelhooks/agent-secrets/releases/latest"
+	DefaultUpdateCheckFile = "update-check.json"
+	CacheDuration          = 24 * time.Hour
 )
 
 // ReleaseInfo represents GitHub release information
@@ -34,12 +37,111 @@ type Asset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
+// UpdateCheckCache stores cached update check results
+type UpdateCheckCache struct {
+	LatestVersion   string    `json:"latest_version"`
+	CurrentVersion  string    `json:"current_version"`
+	CheckedAt       time.Time `json:"checked_at"`
+	UpdateAvailable bool      `json:"update_available"`
+}
+
+// LoadCache reads the cached update check from disk
+func LoadCache(configDir string) (*UpdateCheckCache, error) {
+	cachePath := filepath.Join(configDir, DefaultUpdateCheckFile)
+
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // No cache exists yet
+		}
+		return nil, fmt.Errorf("failed to read cache: %w", err)
+	}
+
+	var cache UpdateCheckCache
+	if err := json.Unmarshal(data, &cache); err != nil {
+		return nil, fmt.Errorf("failed to parse cache: %w", err)
+	}
+
+	return &cache, nil
+}
+
+// SaveCache writes the update check cache to disk using atomic writes
+func SaveCache(configDir string, cache *UpdateCheckCache) error {
+	cachePath := filepath.Join(configDir, DefaultUpdateCheckFile)
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(cache, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache: %w", err)
+	}
+
+	// Create temp file in same directory for atomic rename
+	tmpFile, err := os.CreateTemp(configDir, ".update-check-*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Write and sync
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, cachePath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename cache file: %w", err)
+	}
+
+	return nil
+}
+
 // CheckForUpdate checks if a newer version is available
 func CheckForUpdate(currentVersion string) (*output.UpdateInfo, error) {
 	if currentVersion == "dev" {
 		return nil, nil // Skip update check for dev builds
 	}
 
+	// Get config directory for cache
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	configDir := filepath.Join(homeDir, ".agent-secrets")
+
+	// Try to load cache
+	cache, err := LoadCache(configDir)
+	if err != nil {
+		// Log error but continue to API call
+		fmt.Fprintf(os.Stderr, "Warning: failed to load cache: %v\n", err)
+	}
+
+	// If cache exists and is fresh, return cached result
+	if cache != nil && cache.CurrentVersion == currentVersion {
+		if time.Since(cache.CheckedAt) < CacheDuration {
+			return &output.UpdateInfo{
+				Available:      cache.UpdateAvailable,
+				CurrentVersion: currentVersion,
+				LatestVersion:  cache.LatestVersion,
+				Command:        "secrets update",
+			}, nil
+		}
+	}
+
+	// Cache miss or stale - hit GitHub API
 	latest, err := getLatestRelease()
 	if err != nil {
 		return nil, err
@@ -49,7 +151,22 @@ func CheckForUpdate(currentVersion string) (*output.UpdateInfo, error) {
 	latestVersion := strings.TrimPrefix(latest.TagName, "v")
 	current := strings.TrimPrefix(currentVersion, "v")
 
-	if latestVersion != current {
+	updateAvailable := latestVersion != current
+
+	// Save to cache
+	newCache := &UpdateCheckCache{
+		LatestVersion:   latest.TagName,
+		CurrentVersion:  currentVersion,
+		CheckedAt:       time.Now(),
+		UpdateAvailable: updateAvailable,
+	}
+
+	if err := SaveCache(configDir, newCache); err != nil {
+		// Log error but don't fail the check
+		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
+	}
+
+	if updateAvailable {
 		return &output.UpdateInfo{
 			Available:      true,
 			CurrentVersion: currentVersion,
