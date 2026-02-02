@@ -184,11 +184,15 @@ func (s *Scanner) ScanFile(filePath string) ([]Finding, error) {
 }
 
 // isExcluded checks if a path matches any exclusion pattern.
+// Matches against directory/file base names, not arbitrary substrings.
 func (s *Scanner) isExcluded(path string) bool {
+	// Check each path component against exclusion patterns
+	parts := strings.Split(path, string(filepath.Separator))
 	for _, exclude := range s.excludes {
-		// Simple prefix matching for now
-		if strings.Contains(path, exclude) {
-			return true
+		for _, part := range parts {
+			if part == exclude {
+				return true
+			}
 		}
 	}
 	return false

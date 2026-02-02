@@ -315,6 +315,57 @@ func TestExclusions(t *testing.T) {
 	}
 }
 
+// TestExclusionSubstringRegression tests that exclusion patterns only match
+// directory/file names exactly, not substrings in the path.
+// This is a regression test for a bug where "build" excluded "course-builder".
+func TestExclusionSubstringRegression(t *testing.T) {
+	patterns := DefaultPatterns()
+	// "build" should NOT exclude "course-builder" in the path
+	scanner := NewScanner(patterns, []string{"build", "dist"}).WithRecursive(true)
+
+	tmpdir, err := os.MkdirTemp("", "test-substring-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	// Create a path with "builder" (contains "build" as substring)
+	// This should NOT be excluded
+	builderDir := filepath.Join(tmpdir, "course-builder", "src")
+	if err := os.MkdirAll(builderDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(builderDir, ".env"), []byte("API_KEY=secret_key_value_1234567890"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an actual "build" directory that SHOULD be excluded
+	buildDir := filepath.Join(tmpdir, "build")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(buildDir, ".env"), []byte("API_KEY=secret_key_value_1234567890"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := scanner.Scan(tmpdir)
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	// Should scan the file in course-builder/src but NOT in build/
+	if result.ScannedFiles != 1 {
+		t.Errorf("expected to scan 1 file (course-builder/src/.env), scanned %d", result.ScannedFiles)
+	}
+
+	// The finding should be from course-builder, not build
+	for _, f := range result.Findings {
+		if strings.Contains(f.File, "/build/") {
+			t.Errorf("found file in excluded build directory: %s", f.File)
+		}
+	}
+}
+
 func TestBinaryFileSkipping(t *testing.T) {
 	patterns := DefaultPatterns()
 	scanner := NewScanner(patterns, nil)
