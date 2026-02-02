@@ -1,0 +1,27 @@
+{
+  "id": "agent-secrets",
+  "name": "Agent Secrets",
+  "description": "Portable credential management for AI agents with age encryption, session-scoped leases, auto-rotation hooks, killswitch, and audit logging.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cli_path": {
+        "type": "string",
+        "description": "Path to the secrets CLI (defaults to 'secrets' in PATH)",
+        "default": "secrets"
+      },
+      "default_ttl": {
+        "type": "string",
+        "description": "Default lease TTL (e.g., '1h', '30m')",
+        "default": "1h"
+      },
+      "client_id_prefix": {
+        "type": "string",
+        "description": "Prefix for client IDs in audit logs",
+        "default": "openclaw"
+      }
+    }
+  },
+  "skills": ["skills/secret-management"]
+}

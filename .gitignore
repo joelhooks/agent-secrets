@@ -37,3 +37,7 @@ vendor/
 # Debug
 debug
 *.log
+
+# Agent worker tracking
+.claude/.worker-tracking/
+.opencode/.worker-tracking/

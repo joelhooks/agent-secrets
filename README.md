@@ -22,31 +22,53 @@ AI agents need secrets. API keys, tokens, credentials. But giving an agent raw a
 - 🚨 **Multi-factor killswitch** — revoke all + rotate all + wipe
 - 📋 **Append-only audit log** — every access recorded
 
+## Installation
+
+**One-liner (macOS, Linux, WSL):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/joelhooks/agent-secrets/main/install.sh | bash
+```
+
+**Or clone and install manually:**
+```bash
+git clone https://github.com/joelhooks/agent-secrets
+cd agent-secrets
+make build
+sudo mv secrets /usr/local/bin/
+```
+
+**Or with Go:**
+```bash
+go install github.com/joelhooks/agent-secrets/cmd/secrets@latest
+```
+
+**Verify:**
+```bash
+secrets --help
+```
+
 ## Quick Start
 
 ```bash
-# Build
-make build
-
 # Initialize encrypted store (creates ~/.agent-secrets/)
-./secrets init
+secrets init
 
 # Add secrets
-./secrets add github_token --rotate-via "gh auth refresh"
-./secrets add anthropic_key
-echo "sk-ant-..." | ./secrets add openai_key
+secrets add github_token --rotate-via "gh auth refresh"
+secrets add anthropic_key
+echo "sk-ant-..." | secrets add openai_key
 
 # Get a lease (returns secret value, starts TTL timer)
-export GITHUB_TOKEN=$(./secrets lease github_token --ttl 1h)
+export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h)
 
 # View status
-./secrets status
+secrets status
 
 # View audit log
-./secrets audit --tail 20
+secrets audit --tail 20
 
 # Emergency: revoke all leases
-./secrets revoke --all
+secrets revoke --all
 ```
 
 ## Architecture
@@ -188,17 +210,161 @@ Config stored at `~/.agent-secrets/config.json`:
 }
 ```
 
-## For AI Agents
+## Agent Integration
 
-### Claude Code / Cline / Aider
+Once the CLI is installed globally (`secrets` in PATH), any AI agent with shell access can use it directly. For richer integration, install the skill documentation or platform plugins.
+
+### Any Agent (Direct CLI)
+
+Works out of the box with any agent that can run shell commands:
+
 ```bash
-# In your agent's environment setup
-export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "claude-code")
-export ANTHROPIC_API_KEY=$(secrets lease anthropic_key --ttl 1h --client-id "claude-code")
+# Lease credentials for a task
+export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "claude-refactor-123")
+export ANTHROPIC_API_KEY=$(secrets lease anthropic_key --ttl 1h --client-id "claude-refactor-123")
+
+# Check status
+secrets status
+
+# Revoke when done
+secrets revoke --all
 ```
 
+**Best practices:**
+- Use descriptive `--client-id` values (task name, agent ID)
+- Match TTL to expected task duration
+- Revoke leases when task completes or errors
+
+---
+
+### Claude Code / OpenCode (Agent Skills)
+
+Install the skill documentation so agents understand capabilities and usage patterns.
+
+**Option 1: Global skills (recommended)**
+```bash
+# Install skill globally - available to all projects
+mkdir -p ~/.claude/skills
+cp -r agent-secrets/skills/secret-management ~/.claude/skills/
+
+# For OpenCode
+mkdir -p ~/.opencode/skills
+cp -r agent-secrets/skills/secret-management ~/.opencode/skills/
+```
+
+**Option 2: Per-project skills**
+```bash
+# Add to a specific project
+mkdir -p your-project/.claude/skills
+cp -r agent-secrets/skills/secret-management your-project/.claude/skills/
+```
+
+Once installed, agents will discover the skill and know how to use the CLI:
+```bash
+secrets status
+secrets lease github_token --ttl 1h --client-id "claude-session-123"
+```
+
+---
+
+### OpenClaw Plugin
+
+The repo includes a full OpenClaw plugin with registered tools.
+
+**Installation**
+
+Add to your OpenClaw config (`~/.openclaw/config.json`):
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": ["~/path/to/agent-secrets"]
+    },
+    "entries": {
+      "agent-secrets": {
+        "enabled": true,
+        "config": {
+          "default_ttl": "1h",
+          "client_id_prefix": "openclaw"
+        }
+      }
+    }
+  }
+}
+```
+
+The plugin assumes `secrets` is in your PATH. Override with `"cli_path": "/custom/path/secrets"` if needed.
+
+**Registered Tools**
+
+| Tool | Description | Optional |
+|------|-------------|----------|
+| `secrets_lease` | Acquire time-bounded credential | No |
+| `secrets_status` | Check daemon and lease status | No |
+| `secrets_revoke` | Revoke specific lease | No |
+| `secrets_audit` | View audit log | No |
+| `secrets_add` | Add new secret | Yes (allowlist) |
+| `secrets_killswitch` | Emergency revoke all | Yes (allowlist) |
+
+**Enabling optional tools** (dangerous operations require explicit allowlist):
+
+```json
+{
+  "agents": {
+    "list": [{
+      "id": "main",
+      "tools": {
+        "allow": ["secrets_add", "secrets_killswitch"]
+      }
+    }]
+  }
+}
+```
+
+**Usage in OpenClaw:**
+```
+Agent: I need to access the GitHub token for this task.
+
+[Tool: secrets_lease]
+{
+  "name": "github_token",
+  "ttl": "30m",
+  "client_id": "openclaw-task-123"
+}
+
+→ Returns: ghp_xxxxxxxxxxxx
+```
+
+---
+
+### Direct CLI Usage (Any Agent)
+
+Any agent with shell access can use the CLI directly:
+
+```bash
+# In your agent's environment setup or task preamble
+export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "my-agent")
+export ANTHROPIC_API_KEY=$(secrets lease anthropic_key --ttl 1h --client-id "my-agent")
+
+# Check what's available
+secrets status
+
+# When done or on error, revoke the lease
+secrets revoke $LEASE_ID
+```
+
+**Best practices for agents:**
+1. Use descriptive `--client-id` values (e.g., `"claude-refactor-auth-module"`)
+2. Match TTL to expected task duration
+3. Revoke leases when task completes
+4. Use `secrets audit` to review access patterns
+
+---
+
 ### MCP Server Integration
-Coming soon — expose as an MCP tool for direct agent access with automatic lease management.
+
+Coming soon — expose as an MCP tool server for direct agent access with automatic lease management.
 
 ## Development
 
