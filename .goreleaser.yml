@@ -1,0 +1,106 @@
+# GoReleaser configuration for agent-secrets
+# Docs: https://goreleaser.com
+
+version: 2
+
+project_name: agent-secrets
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: secrets
+    binary: secrets
+    main: ./cmd/secrets
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - skills/**/*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: joelhooks
+    name: agent-secrets
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  header: |
+    ## agent-secrets v{{.Version}}
+
+    Portable credential management for AI agents.
+
+    ### Installation
+
+    ```bash
+    # One-liner
+    curl -fsSL https://raw.githubusercontent.com/joelhooks/agent-secrets/main/install.sh | bash
+
+    # Or download binary directly
+    # macOS (Apple Silicon)
+    curl -LO https://github.com/joelhooks/agent-secrets/releases/download/v{{.Version}}/agent-secrets_{{.Version}}_darwin_arm64.tar.gz
+
+    # macOS (Intel)
+    curl -LO https://github.com/joelhooks/agent-secrets/releases/download/v{{.Version}}/agent-secrets_{{.Version}}_darwin_amd64.tar.gz
+
+    # Linux (x86_64)
+    curl -LO https://github.com/joelhooks/agent-secrets/releases/download/v{{.Version}}/agent-secrets_{{.Version}}_linux_amd64.tar.gz
+
+    # Linux (ARM64)
+    curl -LO https://github.com/joelhooks/agent-secrets/releases/download/v{{.Version}}/agent-secrets_{{.Version}}_linux_arm64.tar.gz
+    ```
+
+brews:
+  - name: agent-secrets
+    repository:
+      owner: joelhooks
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/joelhooks/agent-secrets
+    description: Portable credential management for AI agents
+    license: MIT
+    skip_upload: auto
+    install: |
+      bin.install "secrets"
+    test: |
+      system "#{bin}/secrets", "--help"

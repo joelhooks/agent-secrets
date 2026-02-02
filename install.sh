@@ -116,22 +116,56 @@ install_from_source() {
     success "Installed to $install_dir/secrets"
 }
 
-# Download pre-built binary (when releases exist)
+# Get latest release version from GitHub
+get_latest_version() {
+    curl -fsSL "https://api.github.com/repos/joelhooks/agent-secrets/releases/latest" 2>/dev/null | \
+        grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo ""
+}
+
+# Download pre-built binary
 install_from_release() {
     local install_dir="$1"
     local platform="$2"
-    local version="${3:-latest}"
+    local version="${3:-}"
+    local tmp_dir
 
-    # TODO: Uncomment when releases are published
-    # local url="https://github.com/joelhooks/agent-secrets/releases/download/${version}/secrets_${platform}.tar.gz"
-    #
-    # info "Downloading $url..."
-    # curl -fsSL "$url" | tar -xz -C "$install_dir" secrets
-    # success "Installed to $install_dir/secrets"
+    # Get latest version if not specified
+    if [[ -z "$version" ]]; then
+        info "Checking for latest release..."
+        version=$(get_latest_version)
+    fi
 
-    # For now, fall back to source
-    warn "Pre-built binaries not yet available, building from source..."
-    install_from_source "$install_dir"
+    if [[ -z "$version" ]]; then
+        warn "No releases found, building from source..."
+        install_from_source "$install_dir"
+        return
+    fi
+
+    local version_num="${version#v}"  # Remove 'v' prefix for filename
+    local filename="agent-secrets_${version_num}_${platform}.tar.gz"
+    local url="https://github.com/joelhooks/agent-secrets/releases/download/${version}/${filename}"
+
+    info "Downloading ${version}..."
+
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf $tmp_dir" EXIT
+
+    if curl -fsSL "$url" -o "$tmp_dir/release.tar.gz" 2>/dev/null; then
+        cd "$tmp_dir"
+        tar -xzf release.tar.gz
+
+        info "Installing to $install_dir..."
+        if [[ -w "$install_dir" ]]; then
+            mv secrets "$install_dir/"
+        else
+            sudo mv secrets "$install_dir/"
+        fi
+
+        success "Installed $version to $install_dir/secrets"
+    else
+        warn "Failed to download release, building from source..."
+        install_from_source "$install_dir"
+    fi
 }
 
 # Verify installation
