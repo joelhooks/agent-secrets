@@ -312,14 +312,20 @@ func GetCommit() string {
 	return output.Commit
 }
 
+// GetBuildDate returns the build date (from ldflags)
+func GetBuildDate() string {
+	return output.BuildDate
+}
+
 // VersionInfo returns structured version information
 func VersionInfo() map[string]interface{} {
 	return map[string]interface{}{
-		"version": GetVersion(),
-		"commit":  GetCommit(),
-		"go":      runtime.Version(),
-		"os":      runtime.GOOS,
-		"arch":    runtime.GOARCH,
+		"version":    GetVersion(),
+		"commit":     GetCommit(),
+		"build_date": GetBuildDate(),
+		"go":         runtime.Version(),
+		"os":         runtime.GOOS,
+		"arch":       runtime.GOARCH,
 	}
 }
 

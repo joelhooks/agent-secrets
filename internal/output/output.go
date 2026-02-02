@@ -47,8 +47,9 @@ var (
 
 // Version info (set by ldflags)
 var (
-	Version = "dev"
-	Commit  = "unknown"
+	Version   = "dev"
+	Commit    = "unknown"
+	BuildDate = "unknown"
 )
 
 // Print outputs the response using the configured formatter
