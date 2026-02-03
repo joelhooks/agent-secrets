@@ -48,6 +48,12 @@ func (b *EntryBuilder) WithDetails(details string) *EntryBuilder {
 	return b
 }
 
+// WithNamespace adds the namespace to the audit entry.
+func (b *EntryBuilder) WithNamespace(namespace string) *EntryBuilder {
+	b.entry.Namespace = namespace
+	return b
+}
+
 // Build returns the constructed audit entry.
 func (b *EntryBuilder) Build() *types.AuditEntry {
 	return b.entry

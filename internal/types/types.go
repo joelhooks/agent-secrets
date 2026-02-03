@@ -8,24 +8,32 @@ import (
 // Secret represents an encrypted secret with optional rotation configuration.
 type Secret struct {
 	Name        string    `json:"name"`
+	Namespace   string    `json:"namespace"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	RotateVia   string    `json:"rotate_via,omitempty"` // Command to execute for rotation
 	LastRotated time.Time `json:"last_rotated,omitempty"`
 }
 
+// FullName returns the fully qualified secret reference "namespace::name"
+func (s *Secret) FullName() string {
+	return s.Namespace + "::" + s.Name
+}
+
 // Lease represents a time-bounded access grant to a secret.
 type Lease struct {
-	ID        string    `json:"id"`
-	SecretName string   `json:"secret_name"`
-	ClientID  string    `json:"client_id"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Revoked   bool      `json:"revoked"`
+	ID         string    `json:"id"`
+	Namespace  string    `json:"namespace"`
+	SecretName string    `json:"secret_name"`
+	ClientID   string    `json:"client_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Revoked    bool      `json:"revoked"`
 }
 
 // LeaseRequest represents a request to acquire a lease on a secret.
 type LeaseRequest struct {
+	Namespace  string        `json:"namespace"`
 	SecretName string        `json:"secret_name"`
 	ClientID   string        `json:"client_id"`
 	TTL        time.Duration `json:"ttl"`
@@ -39,13 +47,14 @@ type LeaseResponse struct {
 
 // AuditEntry represents a single audit log entry.
 type AuditEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Action    Action    `json:"action"`
-	SecretName string   `json:"secret_name,omitempty"`
-	ClientID  string    `json:"client_id,omitempty"`
-	LeaseID   string    `json:"lease_id,omitempty"`
-	Details   string    `json:"details,omitempty"`
-	Success   bool      `json:"success"`
+	Timestamp  time.Time `json:"timestamp"`
+	Action     Action    `json:"action"`
+	Namespace  string    `json:"namespace,omitempty"`
+	SecretName string    `json:"secret_name,omitempty"`
+	ClientID   string    `json:"client_id,omitempty"`
+	LeaseID    string    `json:"lease_id,omitempty"`
+	Details    string    `json:"details,omitempty"`
+	Success    bool      `json:"success"`
 }
 
 // Action represents the type of operation being audited.

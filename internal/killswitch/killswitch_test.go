@@ -74,12 +74,12 @@ func TestKillswitch_Activate_RevokeAll(t *testing.T) {
 	}
 
 	// Create some leases
-	_, err := lm.Acquire("test-secret", "client-1", 5*time.Minute)
+	_, err := lm.Acquire("default", "test-secret", "client-1", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to acquire lease: %v", err)
 	}
 
-	_, err = lm.Acquire("test-secret", "client-2", 5*time.Minute)
+	_, err = lm.Acquire("default", "test-secret", "client-2", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to acquire lease: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestKillswitch_Activate_AllOptions(t *testing.T) {
 	}
 
 	// Create a lease
-	_, err := lm.Acquire("test-secret", "client-1", 5*time.Minute)
+	_, err := lm.Acquire("default", "test-secret", "client-1", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to acquire lease: %v", err)
 	}

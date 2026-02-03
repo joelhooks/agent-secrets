@@ -176,7 +176,7 @@ func TestHandleList(t *testing.T) {
 		}
 	}
 
-	result, err := handler.handleList()
+	result, err := handler.handleList(nil)
 	if err != nil {
 		t.Fatalf("handleList failed: %v", err)
 	}
@@ -189,6 +189,9 @@ func TestHandleList(t *testing.T) {
 	for _, meta := range result.Secrets {
 		if meta.Name == "" {
 			t.Error("expected non-empty secret name")
+		}
+		if meta.Namespace == "" {
+			t.Error("expected non-empty namespace")
 		}
 	}
 }
@@ -259,7 +262,7 @@ func TestHandleRevoke(t *testing.T) {
 		t.Fatalf("failed to add secret: %v", err)
 	}
 
-	lse, err := handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
+	lse, err := handler.leaseManager.Acquire("default", "test-secret", "test-client", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to acquire lease: %v", err)
 	}
@@ -293,13 +296,13 @@ func TestHandleRevokeAll(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		_, err := handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
+		_, err := handler.leaseManager.Acquire("default", "test-secret", "test-client", 1*time.Hour)
 		if err != nil {
 			t.Fatalf("failed to acquire lease: %v", err)
 		}
 	}
 
-	result, err := handler.handleRevokeAll()
+	result, err := handler.handleRevokeAll(nil)
 	if err != nil {
 		t.Fatalf("handleRevokeAll failed: %v", err)
 	}
@@ -325,7 +328,7 @@ func TestHandleAudit(t *testing.T) {
 
 	// Perform some operations to generate audit entries
 	handler.store.Add("test-secret", "test-value", "")
-	handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
+	handler.leaseManager.Acquire("default", "test-secret", "test-client", 1*time.Hour)
 
 	params := AuditParams{Tail: 10}
 	result, err := handler.handleAudit(params)
@@ -345,7 +348,7 @@ func TestHandleStatus(t *testing.T) {
 	// Add some secrets and leases
 	handler.store.Add("secret1", "value1", "")
 	handler.store.Add("secret2", "value2", "")
-	handler.leaseManager.Acquire("secret1", "client1", 1*time.Hour)
+	handler.leaseManager.Acquire("default", "secret1", "client1", 1*time.Hour)
 
 	status, err := handler.handleStatus()
 	if err != nil {

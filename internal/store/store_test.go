@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -583,4 +584,212 @@ func isSecretError(err error, target **types.SecretError) bool {
 		*target = secretErr
 	}
 	return ok
+}
+
+func TestParseSecretRef_WithNamespace(t *testing.T) {
+	namespace, name := ParseSecretRef("production::api_key")
+	if namespace != "production" {
+		t.Errorf("expected namespace %q, got %q", "production", namespace)
+	}
+	if name != "api_key" {
+		t.Errorf("expected name %q, got %q", "api_key", name)
+	}
+}
+
+func TestParseSecretRef_WithoutNamespace(t *testing.T) {
+	namespace, name := ParseSecretRef("api_key")
+	if namespace != DefaultNamespace {
+		t.Errorf("expected namespace %q, got %q", DefaultNamespace, namespace)
+	}
+	if name != "api_key" {
+		t.Errorf("expected name %q, got %q", "api_key", name)
+	}
+}
+
+func TestParseSecretRef_DoubleDelimiter(t *testing.T) {
+	namespace, name := ParseSecretRef("prod::service::key")
+	if namespace != "prod" {
+		t.Errorf("expected namespace %q, got %q", "prod", namespace)
+	}
+	if name != "service::key" {
+		t.Errorf("expected name %q, got %q", "service::key", name)
+	}
+}
+
+func TestStore_MigrationV1ToV2(t *testing.T) {
+	cfg := testConfig(t)
+	store := New(cfg)
+
+	if err := store.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add secrets with old v1 format (will be saved as v2)
+	if err := store.Add("api_key", "secret123", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Manually create a v1 format store file
+	store.mu.Lock()
+	data := storeData{
+		Version: StoreVersionV1,
+		Secrets: map[string]*secretWithValue{
+			"old_secret": {
+				Secret: types.Secret{
+					Name:      "old_secret",
+					Namespace: "", // v1 has no namespace
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
+				Value: "old_value",
+			},
+		},
+	}
+	plaintext, _ := json.MarshalIndent(data, "", "  ")
+	ciphertext, _ := Encrypt(plaintext, store.identity.Recipient())
+	os.WriteFile(cfg.SecretsPath, ciphertext, 0600)
+	store.mu.Unlock()
+
+	// Load should auto-migrate
+	store2 := New(cfg)
+	if err := store2.Load(); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Verify migrated secret is accessible
+	value, err := store2.Get("old_secret")
+	if err != nil {
+		t.Fatalf("Get failed after migration: %v", err)
+	}
+	if value != "old_value" {
+		t.Errorf("expected %q, got %q", "old_value", value)
+	}
+
+	// Verify namespace was set to default
+	list, err := store2.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, s := range list {
+		if s.Name == "old_secret" {
+			if s.Namespace != DefaultNamespace {
+				t.Errorf("expected namespace %q, got %q", DefaultNamespace, s.Namespace)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("migrated secret not found in list")
+	}
+}
+
+func TestStore_NamespacedSecrets(t *testing.T) {
+	cfg := testConfig(t)
+	store := New(cfg)
+
+	if err := store.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add secrets to different namespaces
+	if err := store.Add("production::api_key", "prod_secret", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Add("staging::api_key", "staging_secret", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Add("api_key", "default_secret", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify each can be retrieved independently
+	prodValue, err := store.Get("production::api_key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prodValue != "prod_secret" {
+		t.Errorf("expected %q, got %q", "prod_secret", prodValue)
+	}
+
+	stagingValue, err := store.Get("staging::api_key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stagingValue != "staging_secret" {
+		t.Errorf("expected %q, got %q", "staging_secret", stagingValue)
+	}
+
+	defaultValue, err := store.Get("api_key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultValue != "default_secret" {
+		t.Errorf("expected %q, got %q", "default_secret", defaultValue)
+	}
+
+	// Verify list shows all with correct namespaces
+	list, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(list) != 3 {
+		t.Fatalf("expected 3 secrets, got %d", len(list))
+	}
+
+	namespaces := make(map[string]string)
+	for _, s := range list {
+		if s.Name == "api_key" {
+			namespaces[s.Namespace] = s.Namespace
+		}
+	}
+
+	if _, ok := namespaces["production"]; !ok {
+		t.Error("production namespace not found")
+	}
+	if _, ok := namespaces["staging"]; !ok {
+		t.Error("staging namespace not found")
+	}
+	if _, ok := namespaces[DefaultNamespace]; !ok {
+		t.Error("default namespace not found")
+	}
+}
+
+func TestStore_DeleteNamespaced(t *testing.T) {
+	cfg := testConfig(t)
+	store := New(cfg)
+
+	if err := store.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add namespaced secrets
+	if err := store.Add("production::api_key", "prod_secret", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Add("staging::api_key", "staging_secret", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete production secret
+	if err := store.Delete("production::api_key"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify production is gone
+	_, err := store.Get("production::api_key")
+	if err == nil {
+		t.Fatal("expected error getting deleted secret")
+	}
+
+	// Verify staging still exists
+	value, err := store.Get("staging::api_key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != "staging_secret" {
+		t.Errorf("expected %q, got %q", "staging_secret", value)
+	}
 }

@@ -5,12 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"filippo.io/age"
 	"github.com/joelhooks/agent-secrets/internal/config"
 	"github.com/joelhooks/agent-secrets/internal/types"
+)
+
+const (
+	DefaultNamespace   = "default"
+	NamespaceDelimiter = "::"
+	StoreVersionV1     = 1
+	StoreVersionV2     = 2
 )
 
 // storeData represents the JSON structure stored in the encrypted file.
@@ -23,6 +31,20 @@ type storeData struct {
 type secretWithValue struct {
 	types.Secret
 	Value string `json:"value"`
+}
+
+// ParseSecretRef parses "namespace::name" or returns default namespace for bare names.
+func ParseSecretRef(ref string) (namespace, name string) {
+	parts := strings.SplitN(ref, NamespaceDelimiter, 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return DefaultNamespace, ref
+}
+
+// secretKey builds the composite key for internal storage.
+func secretKey(namespace, name string) string {
+	return namespace + NamespaceDelimiter + name
 }
 
 // Store manages encrypted secret storage using Age encryption.
@@ -142,6 +164,11 @@ func (s *Store) Load() error {
 		return fmt.Errorf("%w: %v", types.ErrStoreCorrupted, err)
 	}
 
+	// Auto-migrate from v1 to v2
+	if data.Version == StoreVersionV1 || data.Version == 0 {
+		s.migrateV1ToV2(&data)
+	}
+
 	s.secrets = data.Secrets
 	if s.secrets == nil {
 		s.secrets = make(map[string]*secretWithValue)
@@ -165,7 +192,7 @@ func (s *Store) saveUnlocked() error {
 
 	// Marshal to JSON
 	data := storeData{
-		Version: 1,
+		Version: StoreVersionV2,
 		Secrets: s.secrets,
 	}
 
@@ -188,6 +215,24 @@ func (s *Store) saveUnlocked() error {
 	return nil
 }
 
+// migrateV1ToV2 migrates secrets from v1 (flat keys) to v2 (namespaced keys).
+func (s *Store) migrateV1ToV2(data *storeData) {
+	newSecrets := make(map[string]*secretWithValue)
+	for name, secret := range data.Secrets {
+		// Set namespace to default if not already set
+		if secret.Namespace == "" {
+			secret.Namespace = DefaultNamespace
+		}
+		// Re-key using composite key
+		newKey := secretKey(secret.Namespace, name)
+		// Preserve original name (don't change it)
+		secret.Name = name
+		newSecrets[newKey] = secret
+	}
+	data.Secrets = newSecrets
+	data.Version = StoreVersionV2
+}
+
 // Add adds a new secret to the store.
 func (s *Store) Add(name, value, rotateVia string) error {
 	s.mu.Lock()
@@ -197,15 +242,20 @@ func (s *Store) Add(name, value, rotateVia string) error {
 		return types.ErrStoreNotInitialized
 	}
 
+	// Parse namespace from name if provided
+	namespace, simpleName := ParseSecretRef(name)
+	key := secretKey(namespace, simpleName)
+
 	// Check if secret already exists
-	if _, exists := s.secrets[name]; exists {
+	if _, exists := s.secrets[key]; exists {
 		return types.NewSecretError(name, types.ErrSecretExists)
 	}
 
 	now := time.Now()
-	s.secrets[name] = &secretWithValue{
+	s.secrets[key] = &secretWithValue{
 		Secret: types.Secret{
-			Name:      name,
+			Name:      simpleName,
+			Namespace: namespace,
 			CreatedAt: now,
 			UpdatedAt: now,
 			RotateVia: rotateVia,
@@ -225,7 +275,10 @@ func (s *Store) Get(name string) (string, error) {
 		return "", types.ErrStoreNotInitialized
 	}
 
-	secret, exists := s.secrets[name]
+	namespace, simpleName := ParseSecretRef(name)
+	key := secretKey(namespace, simpleName)
+
+	secret, exists := s.secrets[key]
 	if !exists {
 		return "", types.NewSecretError(name, types.ErrSecretNotFound)
 	}
@@ -242,11 +295,14 @@ func (s *Store) Delete(name string) error {
 		return types.ErrStoreNotInitialized
 	}
 
-	if _, exists := s.secrets[name]; !exists {
+	namespace, simpleName := ParseSecretRef(name)
+	key := secretKey(namespace, simpleName)
+
+	if _, exists := s.secrets[key]; !exists {
 		return types.NewSecretError(name, types.ErrSecretNotFound)
 	}
 
-	delete(s.secrets, name)
+	delete(s.secrets, key)
 	return s.saveUnlocked()
 }
 
@@ -276,7 +332,10 @@ func (s *Store) Update(name, value string, rotateVia *string) error {
 		return types.ErrStoreNotInitialized
 	}
 
-	secret, exists := s.secrets[name]
+	namespace, simpleName := ParseSecretRef(name)
+	key := secretKey(namespace, simpleName)
+
+	secret, exists := s.secrets[key]
 	if !exists {
 		return types.NewSecretError(name, types.ErrSecretNotFound)
 	}
@@ -300,7 +359,10 @@ func (s *Store) MarkRotated(name string) error {
 		return types.ErrStoreNotInitialized
 	}
 
-	secret, exists := s.secrets[name]
+	namespace, simpleName := ParseSecretRef(name)
+	key := secretKey(namespace, simpleName)
+
+	secret, exists := s.secrets[key]
 	if !exists {
 		return types.NewSecretError(name, types.ErrSecretNotFound)
 	}

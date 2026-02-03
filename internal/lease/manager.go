@@ -47,13 +47,14 @@ func NewManager(cfg *config.Config, auditLogger *audit.Logger) (*Manager, error)
 }
 
 // Acquire creates a new lease for the specified secret.
-func (m *Manager) Acquire(secretName, clientID string, ttl time.Duration) (*types.Lease, error) {
+func (m *Manager) Acquire(namespace, secretName, clientID string, ttl time.Duration) (*types.Lease, error) {
 	// Validate TTL
 	if ttl <= 0 {
 		ttl = m.cfg.DefaultLeaseTTL
 	}
 	if ttl > m.cfg.MaxLeaseTTL {
 		entry := audit.NewEntry(types.ActionLeaseAcquire, false).
+			WithNamespace(namespace).
 			WithSecret(secretName).
 			WithClient(clientID).
 			WithDetails(fmt.Sprintf("TTL %v exceeds max %v", ttl, m.cfg.MaxLeaseTTL)).
@@ -65,6 +66,7 @@ func (m *Manager) Acquire(secretName, clientID string, ttl time.Duration) (*type
 	now := time.Now()
 	lease := &types.Lease{
 		ID:         uuid.New().String(),
+		Namespace:  namespace,
 		SecretName: secretName,
 		ClientID:   clientID,
 		CreatedAt:  now,
@@ -80,6 +82,7 @@ func (m *Manager) Acquire(secretName, clientID string, ttl time.Duration) (*type
 	_ = m.Save()
 
 	entry := audit.NewEntry(types.ActionLeaseAcquire, true).
+		WithNamespace(namespace).
 		WithSecret(secretName).
 		WithClient(clientID).
 		WithLease(lease.ID).
@@ -110,6 +113,7 @@ func (m *Manager) Revoke(leaseID string) error {
 	_ = m.Save()
 
 	entry := audit.NewEntry(types.ActionLeaseRevoke, true).
+		WithNamespace(lease.Namespace).
 		WithSecret(lease.SecretName).
 		WithClient(lease.ClientID).
 		WithLease(leaseID).
@@ -141,12 +145,12 @@ func (m *Manager) RevokeAll() error {
 	return nil
 }
 
-// RevokeBySecret revokes all leases for a specific secret.
-func (m *Manager) RevokeBySecret(secretName string) error {
+// RevokeBySecret revokes all leases for a specific secret in a namespace.
+func (m *Manager) RevokeBySecret(namespace, secretName string) int {
 	m.mu.Lock()
 	count := 0
 	for _, lease := range m.leases {
-		if lease.SecretName == secretName && !lease.Revoked {
+		if lease.Namespace == namespace && lease.SecretName == secretName && !lease.Revoked {
 			lease.Revoked = true
 			count++
 		}
@@ -156,12 +160,36 @@ func (m *Manager) RevokeBySecret(secretName string) error {
 	_ = m.Save()
 
 	entry := audit.NewEntry(types.ActionLeaseRevoke, true).
+		WithNamespace(namespace).
 		WithSecret(secretName).
 		WithDetails(fmt.Sprintf("revoked %d leases", count)).
 		Build()
 	_ = m.auditLogger.Log(entry)
 
-	return nil
+	return count
+}
+
+// RevokeByNamespace revokes all leases in a specific namespace.
+func (m *Manager) RevokeByNamespace(namespace string) int {
+	m.mu.Lock()
+	count := 0
+	for _, lease := range m.leases {
+		if lease.Namespace == namespace && !lease.Revoked {
+			lease.Revoked = true
+			count++
+		}
+	}
+	m.mu.Unlock()
+
+	_ = m.Save()
+
+	entry := audit.NewEntry(types.ActionLeaseRevoke, true).
+		WithNamespace(namespace).
+		WithDetails(fmt.Sprintf("revoked %d leases in namespace", count)).
+		Build()
+	_ = m.auditLogger.Log(entry)
+
+	return count
 }
 
 // Get retrieves a lease by ID.
@@ -205,6 +233,7 @@ func (m *Manager) CleanupExpired() {
 			expired = append(expired, id)
 
 			entry := audit.NewEntry(types.ActionLeaseExpire, true).
+				WithNamespace(lease.Namespace).
 				WithSecret(lease.SecretName).
 				WithClient(lease.ClientID).
 				WithLease(id).

@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/audit"
@@ -39,6 +40,16 @@ func NewHandler(
 	}
 }
 
+// parseSecretName parses a secret name in the format "namespace::name" or just "name".
+// Returns (namespace, secretName). If no namespace is specified, "default" is used.
+func parseSecretName(fullName string) (namespace, secretName string) {
+	parts := strings.SplitN(fullName, "::", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "default", fullName
+}
+
 // HandleRequest dispatches an RPC request to the appropriate handler method.
 func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 	resp := &types.RPCResponse{
@@ -70,7 +81,7 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 			resp.Result = result
 		}
 	case MethodList:
-		result, err := h.handleList()
+		result, err := h.handleList(req.Params)
 		if err != nil {
 			resp.Error = types.RPCErrorFromError(err)
 		} else {
@@ -91,7 +102,7 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 			resp.Result = result
 		}
 	case MethodRevokeAll:
-		result, err := h.handleRevokeAll()
+		result, err := h.handleRevokeAll(req.Params)
 		if err != nil {
 			resp.Error = types.RPCErrorFromError(err)
 		} else {
@@ -164,13 +175,19 @@ func (h *Handler) handleAdd(params interface{}) (*AddResult, error) {
 		return nil, fmt.Errorf("secret value is required")
 	}
 
-	if err := h.store.Add(p.Name, p.Value, p.RotateVia); err != nil {
+	// Build full name with namespace if provided
+	fullName := p.Name
+	if p.Namespace != "" && !strings.Contains(p.Name, "::") {
+		fullName = p.Namespace + "::" + p.Name
+	}
+
+	if err := h.store.Add(fullName, p.Value, p.RotateVia); err != nil {
 		return nil, err
 	}
 
 	return &AddResult{
 		Success: true,
-		Message: fmt.Sprintf("secret %q added successfully", p.Name),
+		Message: fmt.Sprintf("secret %q added successfully", fullName),
 	}, nil
 }
 
@@ -185,36 +202,67 @@ func (h *Handler) handleDelete(params interface{}) (*DeleteResult, error) {
 		return nil, fmt.Errorf("secret name is required")
 	}
 
+	// Build full name with namespace if provided
+	fullName := p.Name
+	if p.Namespace != "" && !strings.Contains(p.Name, "::") {
+		fullName = p.Namespace + "::" + p.Name
+	}
+
+	// Parse namespace from full secret name
+	namespace, secretName := parseSecretName(fullName)
+
 	// Revoke all leases for this secret before deleting
-	if err := h.leaseManager.RevokeBySecret(p.Name); err != nil {
-		// Log but don't fail deletion
-		_ = h.auditLogger.Log(audit.NewEntry(types.ActionSecretDelete, false).
-			WithSecret(p.Name).
-			WithDetails(fmt.Sprintf("failed to revoke leases: %v", err)).
+	count := h.leaseManager.RevokeBySecret(namespace, secretName)
+	if count > 0 {
+		_ = h.auditLogger.Log(audit.NewEntry(types.ActionSecretDelete, true).
+			WithNamespace(namespace).
+			WithSecret(secretName).
+			WithDetails(fmt.Sprintf("revoked %d leases before deletion", count)).
 			Build())
 	}
 
-	if err := h.store.Delete(p.Name); err != nil {
+	if err := h.store.Delete(fullName); err != nil {
 		return nil, err
 	}
 
 	return &DeleteResult{
 		Success: true,
-		Message: fmt.Sprintf("secret %q deleted successfully", p.Name),
+		Message: fmt.Sprintf("secret %q deleted successfully", fullName),
 	}, nil
 }
 
 // handleList returns metadata for all secrets.
-func (h *Handler) handleList() (*ListResult, error) {
+func (h *Handler) handleList(params interface{}) (*ListResult, error) {
+	var p ListParams
+	if params != nil {
+		if err := unmarshalParams(params, &p); err != nil {
+			// Ignore unmarshal errors for backward compatibility (params may be nil)
+			p = ListParams{}
+		}
+	}
+
 	secrets, err := h.store.List()
 	if err != nil {
 		return nil, err
 	}
 
-	metadata := make([]SecretMetadata, len(secrets))
-	for i, s := range secrets {
+	// Filter by namespace if provided
+	var filtered []types.Secret
+	if p.Namespace != "" {
+		for _, s := range secrets {
+			if s.Namespace == p.Namespace {
+				filtered = append(filtered, s)
+			}
+		}
+	} else {
+		filtered = secrets
+	}
+
+	metadata := make([]SecretMetadata, len(filtered))
+	for i, s := range filtered {
 		metadata[i] = SecretMetadata{
 			Name:        s.Name,
+			Namespace:   s.Namespace,
 			CreatedAt:   s.CreatedAt,
 			UpdatedAt:   s.UpdatedAt,
 			RotateVia:   s.RotateVia,
@@ -249,14 +297,23 @@ func (h *Handler) handleLease(params interface{}) (*LeaseResult, error) {
 		}
 	}
 
+	// Build full name with namespace if provided
+	fullName := p.SecretName
+	if p.Namespace != "" && !strings.Contains(p.SecretName, "::") {
+		fullName = p.Namespace + "::" + p.SecretName
+	}
+
 	// Get the secret value first
-	value, err := h.store.Get(p.SecretName)
+	value, err := h.store.Get(fullName)
 	if err != nil {
 		return nil, err
 	}
 
+	// Parse namespace from full secret name
+	namespace, secretName := parseSecretName(fullName)
+
 	// Acquire the lease
-	lse, err := h.leaseManager.Acquire(p.SecretName, p.ClientID, ttl)
+	lse, err := h.leaseManager.Acquire(namespace, secretName, p.ClientID, ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -289,23 +346,41 @@ func (h *Handler) handleRevoke(params interface{}) (*RevokeResult, error) {
 	}, nil
 }
 
-// handleRevokeAll triggers killswitch to revoke all leases.
-func (h *Handler) handleRevokeAll() (*RevokeAllResult, error) {
-	// Count active leases before revoking
-	activeLeases := h.leaseManager.List()
-	count := len(activeLeases)
+// handleRevokeAll triggers killswitch to revoke all leases or leases for a specific namespace.
+func (h *Handler) handleRevokeAll(params interface{}) (*RevokeAllResult, error) {
+	var p RevokeAllParams
+	if params != nil {
+		if err := unmarshalParams(params, &p); err != nil {
+			// Ignore unmarshal errors for backward compatibility
+			p = RevokeAllParams{}
+		}
+	}
 
-	// Trigger killswitch with revoke-only option
-	if err := h.killswitch.Activate(types.KillswitchOptions{
-		RevokeAll: true,
-	}); err != nil {
-		return nil, fmt.Errorf("killswitch revoke failed: %w", err)
+	var count int
+	var message string
+
+	// If namespace is specified, revoke only that namespace
+	if p.Namespace != "" {
+		count = h.leaseManager.RevokeByNamespace(p.Namespace)
+		message = fmt.Sprintf("revoked %d leases in namespace %q", count, p.Namespace)
+	} else {
+		// Count active leases before revoking
+		activeLeases := h.leaseManager.List()
+		count = len(activeLeases)
+
+		// Trigger killswitch with revoke-only option for all namespaces
+		if err := h.killswitch.Activate(types.KillswitchOptions{
+			RevokeAll: true,
+		}); err != nil {
+			return nil, fmt.Errorf("killswitch revoke failed: %w", err)
+		}
+		message = fmt.Sprintf("all %d active leases revoked", count)
 	}
 
 	return &RevokeAllResult{
 		Success:       true,
 		LeasesRevoked: count,
-		Message:       fmt.Sprintf("all %d active leases revoked", count),
+		Message:       message,
 	}, nil
 }
 
@@ -364,6 +439,7 @@ func (h *Handler) handleAudit(params interface{}) (*AuditResult, error) {
 		jsonEntries[i] = AuditEntryJSON{
 			Timestamp:  e.Timestamp,
 			Action:     string(e.Action),
+			Namespace:  e.Namespace,
 			SecretName: e.SecretName,
 			ClientID:   e.ClientID,
 			LeaseID:    e.LeaseID,

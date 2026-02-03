@@ -53,6 +53,7 @@ func TestAcquire(t *testing.T) {
 
 	tests := []struct {
 		name       string
+		namespace  string
 		secretName string
 		clientID   string
 		ttl        time.Duration
@@ -61,6 +62,7 @@ func TestAcquire(t *testing.T) {
 	}{
 		{
 			name:       "valid lease with default TTL",
+			namespace:  "default",
 			secretName: "test-secret",
 			clientID:   "client-1",
 			ttl:        0, // should use default
@@ -68,6 +70,7 @@ func TestAcquire(t *testing.T) {
 		},
 		{
 			name:       "valid lease with custom TTL",
+			namespace:  "prod",
 			secretName: "test-secret-2",
 			clientID:   "client-2",
 			ttl:        2 * time.Hour,
@@ -75,6 +78,7 @@ func TestAcquire(t *testing.T) {
 		},
 		{
 			name:       "TTL exceeds max",
+			namespace:  "dev",
 			secretName: "test-secret-3",
 			clientID:   "client-3",
 			ttl:        48 * time.Hour,
@@ -85,7 +89,7 @@ func TestAcquire(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lease, err := mgr.Acquire(tt.secretName, tt.clientID, tt.ttl)
+			lease, err := mgr.Acquire(tt.namespace, tt.secretName, tt.clientID, tt.ttl)
 
 			if tt.wantErr {
 				if err == nil {
@@ -107,6 +111,10 @@ func TestAcquire(t *testing.T) {
 
 			if lease.ID == "" {
 				t.Error("lease ID is empty")
+			}
+
+			if lease.Namespace != tt.namespace {
+				t.Errorf("lease.Namespace = %v, want %v", lease.Namespace, tt.namespace)
 			}
 
 			if lease.SecretName != tt.secretName {
@@ -140,7 +148,7 @@ func TestGet(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create a lease
-	lease, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	lease, err := mgr.Acquire("default", "test-secret", "client-1", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
@@ -166,7 +174,7 @@ func TestRevoke(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create a lease
-	lease, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	lease, err := mgr.Acquire("default", "test-secret", "client-1", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
@@ -198,12 +206,12 @@ func TestRevokeAll(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create multiple leases
-	_, err := mgr.Acquire("secret-1", "client-1", 1*time.Hour)
+	_, err := mgr.Acquire("default", "secret-1", "client-1", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
 
-	_, err = mgr.Acquire("secret-2", "client-2", 1*time.Hour)
+	_, err = mgr.Acquire("default", "secret-2", "client-2", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
@@ -224,38 +232,109 @@ func TestRevokeAll(t *testing.T) {
 func TestRevokeBySecret(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
-	// Create leases for different secrets
-	_, err := mgr.Acquire("secret-1", "client-1", 1*time.Hour)
+	// Create leases for different secrets and namespaces
+	_, err := mgr.Acquire("default", "secret-1", "client-1", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
 
-	lease2, err := mgr.Acquire("secret-1", "client-2", 1*time.Hour)
+	lease2, err := mgr.Acquire("default", "secret-1", "client-2", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
 
-	lease3, err := mgr.Acquire("secret-2", "client-3", 1*time.Hour)
+	lease3, err := mgr.Acquire("default", "secret-2", "client-3", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
 
-	// Revoke all leases for secret-1
-	err = mgr.RevokeBySecret("secret-1")
+	// Create a lease in different namespace with same secret name
+	lease4, err := mgr.Acquire("prod", "secret-1", "client-4", 1*time.Hour)
 	if err != nil {
-		t.Fatalf("RevokeBySecret() failed: %v", err)
+		t.Fatalf("Acquire() failed: %v", err)
 	}
 
-	// Verify secret-1 leases are revoked
+	// Revoke all leases for secret-1 in default namespace
+	count := mgr.RevokeBySecret("default", "secret-1")
+	if count != 2 {
+		t.Errorf("RevokeBySecret() revoked %d leases, want 2", count)
+	}
+
+	// Verify default::secret-1 leases are revoked
 	retrieved, _ := mgr.Get(lease2.ID)
 	if !retrieved.Revoked {
-		t.Error("lease for secret-1 should be revoked")
+		t.Error("lease for default::secret-1 should be revoked")
 	}
 
-	// Verify secret-2 lease is still active
+	// Verify default::secret-2 lease is still active
 	retrieved, _ = mgr.Get(lease3.ID)
 	if retrieved.Revoked {
-		t.Error("lease for secret-2 should not be revoked")
+		t.Error("lease for default::secret-2 should not be revoked")
+	}
+
+	// Verify prod::secret-1 lease is still active
+	retrieved, _ = mgr.Get(lease4.ID)
+	if retrieved.Revoked {
+		t.Error("lease for prod::secret-1 should not be revoked")
+	}
+}
+
+func TestRevokeByNamespace(t *testing.T) {
+	mgr, _ := setupTestManager(t)
+
+	// Create leases in different namespaces
+	lease1, err := mgr.Acquire("default", "secret-1", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	lease2, err := mgr.Acquire("default", "secret-2", "client-2", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	lease3, err := mgr.Acquire("prod", "secret-1", "client-3", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	lease4, err := mgr.Acquire("prod", "secret-3", "client-4", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	// Revoke all leases in prod namespace
+	count := mgr.RevokeByNamespace("prod")
+	if count != 2 {
+		t.Errorf("RevokeByNamespace() revoked %d leases, want 2", count)
+	}
+
+	// Verify default namespace leases are still active
+	retrieved, _ := mgr.Get(lease1.ID)
+	if retrieved.Revoked {
+		t.Error("lease in default namespace should not be revoked")
+	}
+
+	retrieved, _ = mgr.Get(lease2.ID)
+	if retrieved.Revoked {
+		t.Error("lease in default namespace should not be revoked")
+	}
+
+	// Verify prod namespace leases are revoked
+	retrieved, _ = mgr.Get(lease3.ID)
+	if !retrieved.Revoked {
+		t.Error("lease in prod namespace should be revoked")
+	}
+
+	retrieved, _ = mgr.Get(lease4.ID)
+	if !retrieved.Revoked {
+		t.Error("lease in prod namespace should be revoked")
+	}
+
+	// Verify List only shows active (default namespace) leases
+	active := mgr.List()
+	if len(active) != 2 {
+		t.Errorf("List() returned %d active leases, want 2", len(active))
 	}
 }
 
@@ -263,8 +342,8 @@ func TestList(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create some leases
-	lease1, _ := mgr.Acquire("secret-1", "client-1", 1*time.Hour)
-	_, _ = mgr.Acquire("secret-2", "client-2", 1*time.Hour)
+	lease1, _ := mgr.Acquire("default", "secret-1", "client-1", 1*time.Hour)
+	_, _ = mgr.Acquire("default", "secret-2", "client-2", 1*time.Hour)
 
 	// List should return both
 	active := mgr.List()
@@ -286,7 +365,7 @@ func TestCleanupExpired(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create a lease that expires immediately
-	lease, err := mgr.Acquire("test-secret", "client-1", 1*time.Millisecond)
+	lease, err := mgr.Acquire("default", "test-secret", "client-1", 1*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
@@ -308,7 +387,7 @@ func TestSaveLoad(t *testing.T) {
 	mgr, tmpDir := setupTestManager(t)
 
 	// Create a lease
-	lease, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	lease, err := mgr.Acquire("default", "test-secret", "client-1", 1*time.Hour)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
@@ -349,6 +428,10 @@ func TestSaveLoad(t *testing.T) {
 		t.Errorf("loaded lease ID = %v, want %v", retrieved.ID, lease.ID)
 	}
 
+	if retrieved.Namespace != lease.Namespace {
+		t.Errorf("loaded lease Namespace = %v, want %v", retrieved.Namespace, lease.Namespace)
+	}
+
 	if retrieved.SecretName != lease.SecretName {
 		t.Errorf("loaded lease SecretName = %v, want %v", retrieved.SecretName, lease.SecretName)
 	}
@@ -358,15 +441,15 @@ func TestSaveLoadExcludesExpiredAndRevoked(t *testing.T) {
 	mgr, tmpDir := setupTestManager(t)
 
 	// Create an expired lease
-	_, _ = mgr.Acquire("expired-secret", "client-1", 1*time.Millisecond)
+	_, _ = mgr.Acquire("default", "expired-secret", "client-1", 1*time.Millisecond)
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a revoked lease
-	revoked, _ := mgr.Acquire("revoked-secret", "client-2", 1*time.Hour)
+	revoked, _ := mgr.Acquire("default", "revoked-secret", "client-2", 1*time.Hour)
 	_ = mgr.Revoke(revoked.ID)
 
 	// Create a valid lease
-	valid, _ := mgr.Acquire("valid-secret", "client-3", 1*time.Hour)
+	valid, _ := mgr.Acquire("default", "valid-secret", "client-3", 1*time.Hour)
 
 	// Save
 	err := mgr.Save()
@@ -430,7 +513,7 @@ func TestCleanupLoop(t *testing.T) {
 	mgr, _ := setupTestManager(t)
 
 	// Create a lease that expires quickly
-	_, err := mgr.Acquire("test-secret", "client-1", 50*time.Millisecond)
+	_, err := mgr.Acquire("default", "test-secret", "client-1", 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Acquire() failed: %v", err)
 	}
