@@ -35,6 +35,7 @@ type AddParams struct {
 	Name      string `json:"name"`
 	Value     string `json:"value"`
 	RotateVia string `json:"rotate_via,omitempty"`
+	Namespace string `json:"namespace,omitempty"` // Optional namespace (defaults to "default")
 }
 
 // AddResult is the result of secrets.add
@@ -50,7 +51,8 @@ type GetParams struct {
 
 // DeleteParams are parameters for secrets.delete
 type DeleteParams struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"` // Optional namespace (defaults to "default")
 }
 
 // DeleteResult is the result of secrets.delete
@@ -61,7 +63,7 @@ type DeleteResult struct {
 
 // ListParams are parameters for secrets.list
 type ListParams struct {
-	// No parameters needed
+	Namespace string `json:"namespace,omitempty"` // Optional namespace filter (empty = all namespaces)
 }
 
 // ListResult is the result of secrets.list
@@ -72,6 +74,7 @@ type ListResult struct {
 // SecretMetadata contains non-sensitive secret information
 type SecretMetadata struct {
 	Name        string    `json:"name"`
+	Namespace   string    `json:"namespace"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	RotateVia   string    `json:"rotate_via,omitempty"`
@@ -82,7 +85,8 @@ type SecretMetadata struct {
 type LeaseParams struct {
 	SecretName string `json:"secret_name"`
 	ClientID   string `json:"client_id"`
-	TTL        string `json:"ttl"` // Duration string like "1h", "30m"
+	TTL        string `json:"ttl"`       // Duration string like "1h", "30m"
+	Namespace  string `json:"namespace,omitempty"` // Optional namespace (defaults to "default")
 }
 
 // LeaseResult is the result of secrets.lease
@@ -105,7 +109,7 @@ type RevokeResult struct {
 
 // RevokeAllParams are parameters for secrets.revokeAll
 type RevokeAllParams struct {
-	// No parameters needed
+	Namespace string `json:"namespace,omitempty"` // Optional namespace filter (empty = revoke all namespaces)
 }
 
 // RevokeAllResult is the result of secrets.revokeAll
@@ -142,6 +146,7 @@ type AuditResult struct {
 type AuditEntryJSON struct {
 	Timestamp  time.Time `json:"timestamp"`
 	Action     string    `json:"action"`
+	Namespace  string    `json:"namespace,omitempty"`
 	SecretName string    `json:"secret_name,omitempty"`
 	ClientID   string    `json:"client_id,omitempty"`
 	LeaseID    string    `json:"lease_id,omitempty"`

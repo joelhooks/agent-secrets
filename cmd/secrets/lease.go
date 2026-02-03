@@ -8,6 +8,7 @@ import (
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
+	"github.com/joelhooks/agent-secrets/internal/store"
 	"github.com/joelhooks/agent-secrets/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -27,13 +28,16 @@ temporary access to the secret value.
 By default, returns a JSON response with lease details and available actions.
 Use --raw to output ONLY the secret value (for piping to shell commands).
 
+Secrets can be namespaced using the syntax: namespace::name
+
 Examples:
   secrets lease github_token                    # JSON response with details
   export TOKEN=$(secrets lease github_token --raw)  # Shell export
-  secrets lease api_key --ttl 30m               # Custom TTL`,
+  secrets lease api_key --ttl 30m               # Custom TTL
+  secrets lease prod::github_token              # Namespace support`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		namespace, name := store.ParseSecretRef(args[0])
 
 		// Default client ID to hostname
 		if leaseClientID == "" {
@@ -46,6 +50,7 @@ Examples:
 		}
 
 		params := daemon.LeaseParams{
+			Namespace:  namespace,
 			SecretName: name,
 			ClientID:   leaseClientID,
 			TTL:        leaseTTL,

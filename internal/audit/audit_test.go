@@ -37,6 +37,7 @@ func TestEntryBuilders(t *testing.T) {
 		WithClient("test-client").
 		WithLease("test-lease").
 		WithDetails("test details").
+		WithNamespace("prod").
 		Build()
 
 	if entry.SecretName != "test-secret" {
@@ -53,6 +54,10 @@ func TestEntryBuilders(t *testing.T) {
 
 	if entry.Details != "test details" {
 		t.Errorf("expected details 'test details', got %q", entry.Details)
+	}
+
+	if entry.Namespace != "prod" {
+		t.Errorf("expected namespace 'prod', got %q", entry.Namespace)
 	}
 }
 
@@ -240,6 +245,87 @@ func TestQueryEmptyLog(t *testing.T) {
 
 	if len(results) != 0 {
 		t.Errorf("expected 0 entries from empty log, got %d", len(results))
+	}
+}
+
+func TestQueryByNamespace(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.log")
+
+	logger, err := New(logPath)
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Close()
+
+	// Log entries with different namespaces
+	entries := []*types.AuditEntry{
+		NewEntry(types.ActionSecretAdd, true).WithSecret("api-key").WithNamespace("prod").Build(),
+		NewEntry(types.ActionSecretAdd, true).WithSecret("db-password").WithNamespace("dev").Build(),
+		NewEntry(types.ActionLeaseAcquire, true).WithSecret("api-key").WithNamespace("prod").Build(),
+		NewEntry(types.ActionLeaseAcquire, true).WithSecret("db-password").WithNamespace("dev").Build(),
+		NewEntry(types.ActionDaemonStart, true).Build(), // No namespace
+	}
+
+	for _, entry := range entries {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("failed to log entry: %v", err)
+		}
+	}
+
+	// Query by namespace "prod"
+	prodNS := "prod"
+	results, err := logger.Query(QueryFilter{Namespace: &prodNS})
+	if err != nil {
+		t.Fatalf("failed to query log: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("expected 2 entries for namespace 'prod', got %d", len(results))
+	}
+
+	for _, entry := range results {
+		if entry.Namespace != "prod" {
+			t.Errorf("expected namespace 'prod', got %q", entry.Namespace)
+		}
+	}
+
+	// Query by namespace "dev"
+	devNS := "dev"
+	results, err = logger.Query(QueryFilter{Namespace: &devNS})
+	if err != nil {
+		t.Fatalf("failed to query log: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("expected 2 entries for namespace 'dev', got %d", len(results))
+	}
+
+	for _, entry := range results {
+		if entry.Namespace != "dev" {
+			t.Errorf("expected namespace 'dev', got %q", entry.Namespace)
+		}
+	}
+
+	// Query by empty namespace
+	emptyNS := ""
+	results, err = logger.Query(QueryFilter{Namespace: &emptyNS})
+	if err != nil {
+		t.Fatalf("failed to query log: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("expected 1 entry with empty namespace, got %d", len(results))
+	}
+
+	// Query without namespace filter (should return all)
+	results, err = logger.Query(QueryFilter{})
+	if err != nil {
+		t.Fatalf("failed to query log: %v", err)
+	}
+
+	if len(results) != 5 {
+		t.Errorf("expected 5 total entries, got %d", len(results))
 	}
 }
 

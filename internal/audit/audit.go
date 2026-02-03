@@ -93,6 +93,7 @@ func (l *Logger) Tail(n int) ([]*types.AuditEntry, error) {
 type QueryFilter struct {
 	Action     *types.Action
 	SecretName *string
+	Namespace  *string
 	StartTime  *time.Time
 	EndTime    *time.Time
 }
@@ -123,6 +124,9 @@ func (l *Logger) Query(filter QueryFilter) ([]*types.AuditEntry, error) {
 			continue
 		}
 		if filter.SecretName != nil && entry.SecretName != *filter.SecretName {
+			continue
+		}
+		if filter.Namespace != nil && entry.Namespace != *filter.Namespace {
 			continue
 		}
 		if filter.StartTime != nil && entry.Timestamp.Before(*filter.StartTime) {

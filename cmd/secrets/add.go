@@ -10,6 +10,7 @@ import (
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
+	"github.com/joelhooks/agent-secrets/internal/store"
 	"github.com/joelhooks/agent-secrets/internal/types"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -26,10 +27,13 @@ var addCmd = &cobra.Command{
 	Long: `Add a new secret to the encrypted store. The secret value can be provided via:
   - The --value flag
   - Piped from stdin (e.g., echo "secret" | secrets add name)
-  - Interactive prompt (secure, no echo)`,
+  - Interactive prompt (secure, no echo)
+
+Secrets can be namespaced using the syntax: namespace::name
+Example: secrets add prod::github_token`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		namespace, name := store.ParseSecretRef(args[0])
 		value := addValue
 
 		// If no value provided via flag, check stdin or prompt
@@ -62,6 +66,7 @@ var addCmd = &cobra.Command{
 		}
 
 		params := daemon.AddParams{
+			Namespace: namespace,
 			Name:      name,
 			Value:     value,
 			RotateVia: addRotateVia,

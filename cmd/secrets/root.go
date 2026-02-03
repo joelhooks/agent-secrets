@@ -50,6 +50,7 @@ func init() {
 	// Add all subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(leaseCmd)
 	rootCmd.AddCommand(revokeCmd)
 	rootCmd.AddCommand(auditCmd)
