@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
 	"github.com/joelhooks/agent-secrets/internal/output"
@@ -54,7 +52,7 @@ var updateCmd = &cobra.Command{
 		if daemonWasRunning && daemonPID > 0 {
 			fmt.Printf("Stopping daemon (PID %d) for update...\n", daemonPID)
 			if proc, err := os.FindProcess(daemonPID); err == nil {
-				_ = proc.Signal(syscall.SIGTERM)
+				_ = proc.Signal(os.Interrupt)
 			}
 		}
 
@@ -81,16 +79,9 @@ var updateCmd = &cobra.Command{
 				execPath = "secrets" // fallback
 			}
 
-			// Start daemon in background
-			daemonCmd := exec.Command(execPath, "serve")
-			daemonCmd.Stdout = nil
-			daemonCmd.Stderr = nil
-			daemonCmd.Stdin = nil
-			// Detach from parent process
-			daemonCmd.SysProcAttr = &syscall.SysProcAttr{
-				Setpgid: true,
-			}
-			if err := daemonCmd.Start(); err != nil {
+			// Start daemon in background (platform-specific)
+			daemonCmd, err := startDaemonDetached(execPath)
+			if err != nil {
 				restartMsg = fmt.Sprintf(" (daemon restart failed: %v)", err)
 			} else {
 				restartMsg = fmt.Sprintf(" (daemon restarted, PID %d)", daemonCmd.Process.Pid)
