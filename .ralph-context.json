@@ -272,16 +272,17 @@
     {
       "id": "story-mlt172li",
       "title": "Test coverage: internal/update and internal/types",
-      "status": "failed",
+      "status": "completed",
       "filesModified": [
         ".ralph-context.json",
         ".ralph-iterations.jsonl",
         "cmd/secrets/root_test.go",
         "prd.json",
         "progress.txt",
+        "internal/types/exitcodes.go",
         "internal/update/update_test.go"
       ],
-      "learnings": "[verification_rejected] ok  \tgithub.com/joelhooks/agent-secrets/cmd/secrets\t(cached)\n?   \tgithub.com/joelhooks/agent-secrets/internal/adapters\t[no test files]\nok  \tgithub.com/joelhooks/agent-secrets/internal/adapters/vercel\t(cached)\nok  \tgithub.com/joelhooks/agent-secrets/internal/audit\t(cached)\nok  \tgithub.com/joelhooks/a"
+      "learnings": "Technical Discovery: `ExitCodeFromError` helper predicates in `internal/types/exitcodes.go` must use `errors.Is` instead of direct equality; otherwise wrapped sentinel errors incorrectly fall through to `ExitGenericError` despite carrying typed context.\nGotcha: When running `swarm memory store` in zsh, avoid backticks in the payload text because they trigger command substitution and noisy shell errors; use single-quoted plain text.\nFiles Context: `internal/update/update_test.go` now includes a success-path `getLatestRelease` test (header + parse). `internal/types/types_test.go` covers wrapped-error exit-code mapping. `internal/types/exitcodes.go` contains the unwrap-aware logic that keeps CLI exit codes stable for wrapped sentinel errors."
     }
   ],
   "failures": [

@@ -462,3 +462,21 @@ Coverage and validation:
 Also completed required workflow commands:
 - `swarm memory store ... --tags "ralph,learning,agent-secrets"`
 - `openclaw system event --mode now --text "Ralph: completed Test coverage: internal/update and internal/types"`
+
+---
+[2026-02-19T06:24:30.606Z]
+Completed: Integration tests: full agent workflow with new commands
+Files: .ralph-context.json, .ralph-iterations.jsonl, internal/types/exitcodes.go, internal/types/types_test.go, internal/update/update_test.go, prd.json, progress.txt, integration_test.go
+Summary: Prior failure pattern detected: `verification_rejected`. Mitigation: I made all story changes in the required target file `integration_test.go` and verified it is present in the diff before validation.
+
+Implemented the new integration coverage in `integration_test.go`:
+- Added `TestAgentWorkflow` for the full end-to-end CLI + daemon path (`init`, `serve`, root command tree, `add`, `list`, raw `lease`, JSON `lease`, `update`, `delete`, `revoke --all`, `status`, daemon stop) at `integration_test.go:271`.
+- Added `TestDeprecatedFlags` validating backward-compatible flags and STDERR deprecation warnings for `--raw`, `--human`, and `--output json` at `integration_test.go:351`.
+- Added `TestErrorResponses` validating structured error envelopes (`ok:false`, `error.message`, `error.code`, `fix`) for missing secrets at `integration_test.go:391`.
+- Added `TestJSONEnvelopeShape` with strict envelope/`next_actions` shape checks and error fix checks at `integration_test.go:413`.
+- Added daemon lifecycle and output helpers (`startDaemon`, `waitForDaemonReady`, `runCommandCapture`, envelope/assert helpers) at `integration_test.go:494`.
+- Updated existing integration tests to current JSON envelope shape (`result` instead of `data`) and added `--no-update-check` for deterministic test runs (notably at `integration_test.go:141` and `integration_test.go:262`).
+
+Executed required completion hooks:
+- `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+- `openclaw system event --mode now --text "Ralph: completed Integration tests: full agent workflow with new commands"`

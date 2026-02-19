@@ -166,11 +166,22 @@
       "targetFiles": [
         "internal/update/update_test.go"
       ]
+    },
+    {
+      "id": "story-mlt2jat9",
+      "title": "Integration tests: full agent workflow with new commands",
+      "description": "Expand integration_test.go with end-to-end tests that exercise the full agent workflow using the actual binary + daemon.\n\nAdd these integration test functions (all with //go:build integration tag):\n\n1. **TestAgentWorkflow** — The complete happy path an agent would follow:\n   - `secrets init` → verify JSON envelope {ok: true}\n   - Start daemon (`secrets serve` in background)\n   - `secrets` (root) → verify command tree JSON, all commands listed\n   - `secrets add test_key --value \"sk-test123\"` → verify success\n   - `secrets add another_key --value \"val2\"` → add second secret\n   - `secrets list` → verify both secrets appear with names\n   - `secrets lease test_key` → verify raw value output \"sk-test123\" (no JSON)\n   - `secrets lease test_key --json` → verify JSON envelope with value, lease_id, next_actions\n   - `secrets update test_key --value \"sk-updated\"` → verify success\n   - `secrets lease test_key` → verify returns \"sk-updated\"\n   - `secrets delete another_key --force` → verify deletion\n   - `secrets list` → verify only test_key remains\n   - `secrets revoke --all` → killswitch\n   - `secrets status` → verify no active leases\n   - Stop daemon\n\n2. **TestDeprecatedFlags** — Verify backwards compat:\n   - `secrets lease test_key --raw` → still works, returns value\n   - `secrets status --human` → doesn't crash\n   - `secrets status --output json` → doesn't crash\n   - Check STDERR for deprecation warnings\n\n3. **TestErrorResponses** — Verify error envelopes:\n   - `secrets lease nonexistent` → verify {ok: false, error: {message, code}, fix}\n   - `secrets delete nonexistent` → verify error with fix suggestion\n   - `secrets update nonexistent --value x` → verify error\n\n4. **TestJSONEnvelopeShape** — Strict envelope validation:\n   - Every command's JSON output has `ok`, `command`, `result` or `error`, `next_actions`\n   - `next_actions` items have `command` and `description` fields\n   - Error responses have `fix` field\n\nEach test should use a temp HOME dir and start/stop its own daemon instance. Use the existing helper functions (getBinaryPath, runCommand) from the file.",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "integration_test.go"
+      ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 14,
-    "lastIteration": "2026-02-19T06:05:53.850Z"
+    "totalIterations": 15,
+    "lastIteration": "2026-02-19T06:24:30.605Z"
   }
 }
