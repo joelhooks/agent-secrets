@@ -71,11 +71,12 @@ type ListResult struct {
 
 // SecretMetadata contains non-sensitive secret information
 type SecretMetadata struct {
-	Name        string    `json:"name"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	RotateVia   string    `json:"rotate_via,omitempty"`
-	LastRotated time.Time `json:"last_rotated,omitempty"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	RotateVia    string    `json:"rotate_via,omitempty"`
+	LastRotated  time.Time `json:"last_rotated,omitempty"`
+	ActiveLeases int       `json:"active_leases"`
 }
 
 // LeaseParams are parameters for secrets.lease

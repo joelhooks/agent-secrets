@@ -101,7 +101,81 @@
         "progress.txt"
       ],
       "learnings": "Technical Discovery: `cmd/secrets/root.go` can override Cobra’s default no-args help with `rootCmd.Run` and still keep detailed help available via `--help`; emitting through `output.Success` preserves the standard response envelope automatically.\nGotcha: `rootCmd.Execute()` in tests can trigger `PersistentPreRunE` update checks unless `noUpdateCheck` is forced true. Keep this isolated in root tests to avoid nondeterministic behavior.\nFiles Context: `cmd/secrets/root.go` now contains the command-tree contract (description/version/commands/next_actions). `cmd/secrets/root_test.go` validates this contract and includes reusable stdout capture + test-global setup helpers."
+    },
+    {
+      "id": "story-mlsr0zv6",
+      "title": "Add fix field to all error responses",
+      "status": "completed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/root.go",
+        "cmd/secrets/root_test.go",
+        "prd.json",
+        "progress.txt",
+        "cmd/secrets/add.go",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/lease_test.go",
+        "cmd/secrets/status.go",
+        "internal/output/output.go",
+        "internal/output/output_test.go",
+        "internal/types/errors.go"
+      ],
+      "learnings": "Technical Discovery: `internal/output/output.go` is the best enforcement point for story-wide fix consistency because most command failures are wrapped (`fmt.Errorf(...: %w, err)`) or stringified RPC errors. A message+`errors.Is` hybrid matcher in `inferFix(...)` catches both sentinel errors (e.g. `types.ErrStoreNotInitialized`) and daemon RPC strings (e.g. `RPC error ... secret not found`) without requiring per-command duplication.\nGotcha: JSON encoding escapes `&` to `\\u0026`, so tests that assert fix strings containing `secrets serve &` must either decode JSON or assert the escaped literal in raw output. Also, some commands still return non-nil after printing JSON errors; that can produce stderr duplicates under Cobra unless error handling is globally silenced.\nFiles Context: `internal/output/output.go` now owns fix inference and explicit helpers (`ErrorWithFix`, `ErrorMsgWithFix`). `cmd/secrets/lease.go` has command-specific handling for daemon/secret-not-found fixes. `cmd/secrets/add.go` covers the empty-value path with required remediation text. `internal/types/errors.go` now maps `UserError.Suggestion` to JSON `fix`. Regression coverage is in `internal/output/output_test.go` and `cmd/secrets/lease_test.go`."
+    },
+    {
+      "id": "story-mlsr197b",
+      "title": "Add list command to show all stored secret names",
+      "status": "failed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/add.go",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/lease_test.go",
+        "cmd/secrets/status.go",
+        "internal/output/output.go",
+        "internal/output/output_test.go",
+        "internal/types/errors.go",
+        "prd.json",
+        "progress.txt",
+        "cmd/secrets/root.go",
+        "cmd/secrets/root_test.go",
+        "internal/daemon/handlers.go",
+        "internal/daemon/handlers_test.go",
+        "internal/daemon/protocol.go"
+      ],
+      "learnings": "[verification_rejected] ok  \tgithub.com/joelhooks/agent-secrets/cmd/secrets\t(cached)\n?   \tgithub.com/joelhooks/agent-secrets/internal/adapters\t[no test files]\nok  \tgithub.com/joelhooks/agent-secrets/internal/adapters/vercel\t(cached)\nok  \tgithub.com/joelhooks/agent-secrets/internal/audit\t(cached)\nok  \tgithub.com/joelhooks/a"
     }
   ],
-  "failures": []
+  "failures": [
+    {
+      "storyId": "story-mlsr197b",
+      "storyTitle": "Add list command to show all stored secret names",
+      "category": "verification_rejected",
+      "error": "[verification_rejected] Required target files not modified: cmd/secrets/list.go. Changed files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/root.go, cmd/secrets/root_test.go, internal/daemon/handlers.go, internal/daemon/handlers_test.go, internal/daemon/protocol.go",
+      "toolNames": [
+        "/usr/bin/zsh -lc",
+        "sed -n",
+        "rg \\",
+        "swarm memory",
+        "nl -ba"
+      ],
+      "iterationNumber": 6
+    },
+    {
+      "storyId": "story-mlsr197b",
+      "storyTitle": "Add list command to show all stored secret names",
+      "category": "verification_rejected",
+      "error": "[verification_rejected] Required target files not modified: cmd/secrets/list.go. Changed files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/root.go, cmd/secrets/root_test.go, internal/daemon/handlers.go, internal/daemon/handlers_test.go, internal/daemon/protocol.go, prd.json, progress.txt",
+      "toolNames": [
+        "/usr/bin/zsh -lc",
+        "sed -n",
+        "rg -n",
+        "swarm memory",
+        "nl -ba"
+      ],
+      "iterationNumber": 7
+    }
+  ]
 }

@@ -63,8 +63,19 @@ func TestRootCommandNoArgsOutputsCommandTreeJSON(t *testing.T) {
 	if resp.Result.Version == "" {
 		t.Fatalf("expected non-empty version")
 	}
-	if len(resp.Result.Commands) != 13 {
-		t.Fatalf("expected 13 commands, got %d", len(resp.Result.Commands))
+	if len(resp.Result.Commands) != 14 {
+		t.Fatalf("expected 14 commands, got %d", len(resp.Result.Commands))
+	}
+
+	hasList := false
+	for _, c := range resp.Result.Commands {
+		if c.Name == "list" {
+			hasList = true
+			break
+		}
+	}
+	if !hasList {
+		t.Fatalf("expected command tree to include list command")
 	}
 
 	if len(resp.NextActions) != 3 {

@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/audit"
@@ -211,16 +212,26 @@ func (h *Handler) handleList() (*ListResult, error) {
 		return nil, err
 	}
 
+	activeLeaseCounts := make(map[string]int)
+	for _, lse := range h.leaseManager.List() {
+		activeLeaseCounts[lse.SecretName]++
+	}
+
 	metadata := make([]SecretMetadata, len(secrets))
 	for i, s := range secrets {
 		metadata[i] = SecretMetadata{
-			Name:        s.Name,
-			CreatedAt:   s.CreatedAt,
-			UpdatedAt:   s.UpdatedAt,
-			RotateVia:   s.RotateVia,
-			LastRotated: s.LastRotated,
+			Name:         s.Name,
+			CreatedAt:    s.CreatedAt,
+			UpdatedAt:    s.UpdatedAt,
+			RotateVia:    s.RotateVia,
+			LastRotated:  s.LastRotated,
+			ActiveLeases: activeLeaseCounts[s.Name],
 		}
 	}
+
+	sort.Slice(metadata, func(i, j int) bool {
+		return metadata[i].Name < metadata[j].Name
+	})
 
 	return &ListResult{Secrets: metadata}, nil
 }

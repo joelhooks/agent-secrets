@@ -67,10 +67,11 @@
       "title": "Add list command to show all stored secret names",
       "description": "Agents need to know what secrets are available. Currently there's no `secrets list` command — you have to infer from `secrets status` which only shows a count.\n\nAdd a new `cmd/secrets/list.go`:\n1. New `listCmd` cobra command: `secrets list`\n2. Calls daemon RPC to get list of secret names (may need new daemon method, or use existing status method if it returns names)\n3. Returns JSON envelope:\n```json\n{\n  \"ok\": true,\n  \"command\": \"secrets list\",\n  \"result\": {\n    \"secrets\": [\n      {\"name\": \"github_token\", \"has_rotation\": true, \"active_leases\": 1},\n      {\"name\": \"anthropic_key\", \"has_rotation\": false, \"active_leases\": 0}\n    ],\n    \"count\": 2\n  },\n  \"next_actions\": [\n    {\"command\": \"secrets lease github_token\", \"description\": \"Lease github_token\"},\n    {\"command\": \"secrets lease anthropic_key\", \"description\": \"Lease anthropic_key\"},\n    {\"command\": \"secrets add <name>\", \"description\": \"Add a new secret\"}\n  ]\n}\n```\n4. The `next_actions` should include a lease command for EACH secret — this is the HATEOAS magic, agents can discover and use secrets in one flow\n5. Register in `cmd/secrets/root.go`\n6. If the daemon doesn't support listing secret names, add a new RPC method `secrets.list` in `internal/daemon/handlers.go` and `internal/daemon/protocol.go`\n\nThis is critical for agent discoverability.",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
-        "cmd/secrets/list.go"
+        "cmd/secrets/",
+        "internal/daemon/"
       ]
     },
     {
@@ -88,7 +89,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 5,
-    "lastIteration": "2026-02-19T01:22:19.918Z"
+    "totalIterations": 6,
+    "lastIteration": "2026-02-19T01:34:58.088Z"
   }
 }

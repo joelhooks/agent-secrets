@@ -176,6 +176,10 @@ func TestHandleList(t *testing.T) {
 		}
 	}
 
+	if _, err := handler.leaseManager.Acquire("secret2", "test-client", time.Hour); err != nil {
+		t.Fatalf("failed to acquire lease: %v", err)
+	}
+
 	result, err := handler.handleList()
 	if err != nil {
 		t.Fatalf("handleList failed: %v", err)
@@ -189,6 +193,47 @@ func TestHandleList(t *testing.T) {
 	for _, meta := range result.Secrets {
 		if meta.Name == "" {
 			t.Error("expected non-empty secret name")
+		}
+	}
+
+	activeByName := make(map[string]int, len(result.Secrets))
+	for _, meta := range result.Secrets {
+		activeByName[meta.Name] = meta.ActiveLeases
+	}
+
+	if activeByName["secret2"] != 1 {
+		t.Errorf("expected secret2 to have 1 active lease, got %d", activeByName["secret2"])
+	}
+	if activeByName["secret1"] != 0 {
+		t.Errorf("expected secret1 to have 0 active leases, got %d", activeByName["secret1"])
+	}
+}
+
+func TestHandleListReturnsSecretsSortedByName(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	// Add names in non-lexicographic order.
+	names := []string{"zeta", "delta", "alpha", "theta", "beta", "gamma", "eta"}
+	for _, name := range names {
+		if err := handler.store.Add(name, "value-"+name, ""); err != nil {
+			t.Fatalf("failed to add secret %q: %v", name, err)
+		}
+	}
+
+	result, err := handler.handleList()
+	if err != nil {
+		t.Fatalf("handleList failed: %v", err)
+	}
+
+	expected := []string{"alpha", "beta", "delta", "eta", "gamma", "theta", "zeta"}
+	if len(result.Secrets) != len(expected) {
+		t.Fatalf("expected %d secrets, got %d", len(expected), len(result.Secrets))
+	}
+
+	for i, want := range expected {
+		if got := result.Secrets[i].Name; got != want {
+			t.Fatalf("expected secret[%d]=%q, got %q", i, want, got)
 		}
 	}
 }
@@ -366,11 +411,11 @@ func TestHandleRequest(t *testing.T) {
 	defer cleanup()
 
 	tests := []struct {
-		name       string
-		method     string
-		params     interface{}
-		expectErr  bool
-		errCode    int
+		name      string
+		method    string
+		params    interface{}
+		expectErr bool
+		errCode   int
 	}{
 		{
 			name:   "init method",

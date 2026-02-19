@@ -40,6 +40,7 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 			Commands: []commandDoc{
 				{Name: "init", Description: "Initialize the secrets store", Usage: "secrets init"},
 				{Name: "add", Description: "Add a secret to the store", Usage: "secrets add <name> [--value <val>] [--rotate-via <cmd>]"},
+				{Name: "list", Description: "List stored secret names", Usage: "secrets list"},
 				{Name: "lease", Description: "Get a secret value (raw by default)", Usage: "secrets lease <name> [--ttl 1h] [--client-id agent-x] [--json]"},
 				{Name: "revoke", Description: "Revoke a lease or killswitch", Usage: "secrets revoke <lease-id> | --all"},
 				{Name: "status", Description: "Daemon status and active leases", Usage: "secrets status"},
@@ -84,6 +85,7 @@ func init() {
 	// Add all subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(leaseCmd)
 	rootCmd.AddCommand(revokeCmd)
 	rootCmd.AddCommand(auditCmd)
