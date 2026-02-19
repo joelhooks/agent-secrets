@@ -94,13 +94,6 @@ var statusCmd = &cobra.Command{
 	},
 }
 
-func formatBool(b bool) string {
-	if b {
-		return "✓ yes"
-	}
-	return "✗ no"
-}
-
 func formatDuration(d time.Duration) string {
 	days := int(d.Hours() / 24)
 	hours := int(d.Hours()) % 24

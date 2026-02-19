@@ -369,8 +369,8 @@ func TestHandleAudit(t *testing.T) {
 	defer cleanup()
 
 	// Perform some operations to generate audit entries
-	handler.store.Add("test-secret", "test-value", "")
-	handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
+	_ = handler.store.Add("test-secret", "test-value", "")
+	_, _ = handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
 
 	params := AuditParams{Tail: 10}
 	result, err := handler.handleAudit(params)
@@ -388,9 +388,9 @@ func TestHandleStatus(t *testing.T) {
 	defer cleanup()
 
 	// Add some secrets and leases
-	handler.store.Add("secret1", "value1", "")
-	handler.store.Add("secret2", "value2", "")
-	handler.leaseManager.Acquire("secret1", "client1", 1*time.Hour)
+	_ = handler.store.Add("secret1", "value1", "")
+	_ = handler.store.Add("secret2", "value2", "")
+	_, _ = handler.leaseManager.Acquire("secret1", "client1", 1*time.Hour)
 
 	status, err := handler.handleStatus()
 	if err != nil {

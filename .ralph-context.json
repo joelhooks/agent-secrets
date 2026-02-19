@@ -146,6 +146,28 @@
         "internal/daemon/protocol.go"
       ],
       "learnings": "Technical Discovery: `handleList()` in `internal/daemon/handlers.go` must sort by `SecretMetadata.Name` because `store.List()` is map-backed and nondeterministic; otherwise list ordering and downstream `next_actions` ordering can drift between runs.\nGotcha: Even with daemon-side sorting, `cmd/secrets/list.go` intentionally keeps client-side sorting so older daemons still produce deterministic CLI output; removing it can regress compatibility in mixed-version environments.\nFiles Context: `cmd/secrets/list.go` handles RPC decode and HATEOAS `next_actions`; `internal/daemon/handlers.go` computes `ActiveLeases` and sorted metadata; `internal/daemon/handlers_test.go` contains the new TDD regression test for sorted ordering."
+    },
+    {
+      "id": "story-mlsr1icp",
+      "title": "Update README, SKILL.md, and AGENTS.md for new CLI design",
+      "status": "completed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/list.go",
+        "cmd/secrets/list_test.go",
+        "cmd/secrets/root.go",
+        "cmd/secrets/root_test.go",
+        "internal/daemon/handlers.go",
+        "internal/daemon/handlers_test.go",
+        "internal/daemon/protocol.go",
+        "prd.json",
+        "progress.txt",
+        "AGENTS.md",
+        "README.md",
+        "skills/secret-management/SKILL.md"
+      ],
+      "learnings": "Technical Discovery: `cmd/secrets/lease.go` is intentionally dual-mode: raw secret output by default for shell substitution, with HATEOAS envelope only on `--json`. Documentation must show both paths clearly or agent workflows break.\nGotcha: Do not document semantic error codes like `not_found` for lease failures; output code currently maps from process exit codes in `internal/types/exitcodes.go` (often `generic_error`) while actionable remediation is carried by the `fix` field.\nFiles Context: `README.md` is the public CLI contract (quick start + command reference), `skills/secret-management/SKILL.md` is the agent runtime playbook, and `AGENTS.md` is contributor/operator guidance. These three must stay aligned with `cmd/secrets/root.go`, `cmd/secrets/list.go`, and `cmd/secrets/lease.go` behavior."
     }
   ],
   "failures": [

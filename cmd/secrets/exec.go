@@ -114,14 +114,14 @@ Examples:
 		case sig := <-sigChan:
 			// Forward signal to child process
 			if command.Process != nil {
-				command.Process.Signal(sig)
+				_ = command.Process.Signal(sig)
 			}
 			// Wait for child to exit or force kill after 5 seconds
 			select {
 			case <-done:
 			case <-time.After(5 * time.Second):
 				if command.Process != nil {
-					command.Process.Kill()
+					_ = command.Process.Kill()
 				}
 			}
 			return fmt.Errorf("terminated by signal: %v", sig)
@@ -155,7 +155,7 @@ Examples:
 		case <-ctx.Done():
 			// TTL timeout
 			if command.Process != nil {
-				command.Process.Kill()
+				_ = command.Process.Kill()
 			}
 			output.Print(output.Error(commandName, fmt.Errorf("command exceeded TTL: %s", execTTL)))
 			return fmt.Errorf("timeout")
