@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/daemon"
-	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/joelhooks/agent-secrets/internal/types"
 )
 
@@ -87,21 +86,15 @@ func setLeaseTestGlobals(testSocket string) func() {
 	origSocketPath := socketPath
 	origLeaseTTL := leaseTTL
 	origLeaseClientID := leaseClientID
-	origOutputFormat := output.OutputFormat
-	origHumanMode := output.HumanMode
 
 	socketPath = testSocket
 	leaseTTL = "1h"
 	leaseClientID = "test-client"
-	output.OutputFormat = ""
-	output.HumanMode = false
 
 	return func() {
 		socketPath = origSocketPath
 		leaseTTL = origLeaseTTL
 		leaseClientID = origLeaseClientID
-		output.OutputFormat = origOutputFormat
-		output.HumanMode = origHumanMode
 	}
 }
 

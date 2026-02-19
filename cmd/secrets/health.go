@@ -25,7 +25,6 @@ var healthCmd = &cobra.Command{
 
 Examples:
   secrets health                  # Full health report
-  secrets health --output json    # Machine-readable output
   secrets health --warnings       # Only show warnings`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		const commandName = "secrets health"

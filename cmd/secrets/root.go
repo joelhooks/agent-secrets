@@ -22,11 +22,6 @@ var rootCmd = &cobra.Command{
 	Long: `agent-secrets provides secure, time-bounded credential management with
 audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Validate output format flag
-		if err := output.ValidateMode(output.OutputFormat); err != nil {
-			return err
-		}
-
 		// Skip update check if disabled or if running the update command itself
 		if noUpdateCheck || cmd.Name() == "update" {
 			return nil
@@ -39,8 +34,6 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&output.HumanMode, "human", false, "Human-readable output (deprecated: use --output table)")
-	rootCmd.PersistentFlags().StringVar(&output.OutputFormat, "output", "", "Output format: json, table, or raw (default: auto-detect based on TTY)")
 	rootCmd.PersistentFlags().StringVar(&socketPath, "socket", "", "Override Unix socket path")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Override config file path")
 	rootCmd.PersistentFlags().BoolVar(&noUpdateCheck, "no-update-check", false, "Disable automatic update check (useful for CI)")

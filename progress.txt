@@ -62,3 +62,23 @@ Required side tasks completed:
 - Sent completion event via `openclaw system event`.
 
 Note: I observed untracked `.ralph-context.json` and `.ralph-iterations.jsonl` in `git status`; I did not modify them.
+
+---
+[2026-02-19T01:12:25.194Z]
+Completed: Remove TTY detection and legacy output format flags — JSON always
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/lease.go, cmd/secrets/lease_test.go, internal/output/output.go, internal/output/output_test.go, prd.json, progress.txt, cmd/secrets/health.go, cmd/secrets/root.go, cmd/secrets/scan.go, internal/output/formatter.go, internal/output/formatter_test.go, internal/output/table.go, internal/update/update.go
+Summary: Implemented story `story-mlsr0ekt` (JSON-only output, no legacy output flags).
+
+What changed:
+- Removed legacy root flags and validation from `cmd/secrets/root.go:24` and `cmd/secrets/root.go:36`.
+- Simplified formatter system to JSON-only in `internal/output/formatter.go:3` (`GetFormatter()` now always returns `JSONFormatter`; removed `OutputMode`, TTY detection, and `ValidateMode`).
+- Simplified `Print()` to always JSON encode in `internal/output/output.go:53`, and removed legacy human/table helpers and globals.
+- Deleted table formatter file `internal/output/table.go`.
+- Kept raw formatter intact for internal lease/raw use (`internal/output/raw.go` unchanged in behavior).
+- Updated tests:
+  - `internal/output/formatter_test.go:7` now verifies JSON-only formatter.
+  - Added `cmd/secrets/root_test.go:5` to assert `--human` and `--output` are gone.
+  - Updated `internal/output/output_test.go:93` to assert `Print()` outputs JSON envelope.
+  - Updated `cmd/secrets/lease_test.go:86` to remove removed output globals.
+- Cleaned stale command docs referencing removed flags in `cmd/secrets/scan.go:24` and `cmd/secrets/health.go:25`.
+- Removed remaining compile-time dependency on `output.HumanMode` in `internal/update/update.go:332` by making background update checks silent in JSON-only mode.

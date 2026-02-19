@@ -90,8 +90,7 @@ func TestRawFormatterReadsResult(t *testing.T) {
 	}
 }
 
-func TestTableFormatterReadsErrorDetailAndFix(t *testing.T) {
-	formatter := &TableFormatter{}
+func TestPrintAlwaysOutputsJSON(t *testing.T) {
 	resp := Response{
 		OK:      false,
 		Command: "secrets lease",
@@ -102,17 +101,20 @@ func TestTableFormatterReadsErrorDetailAndFix(t *testing.T) {
 		Fix: "start the daemon with: secrets serve &",
 	}
 
-	output := captureStdout(t, func() {
-		if err := formatter.Format(resp); err != nil {
-			t.Fatalf("format failed: %v", err)
-		}
+	out := captureStdout(t, func() {
+		Print(resp)
 	})
 
-	if !strings.Contains(output, "daemon unavailable") {
-		t.Fatalf("expected error message in output: %q", output)
+	if !strings.Contains(out, `"ok": false`) {
+		t.Fatalf("expected json output, got %q", out)
 	}
-	if !strings.Contains(output, "Fix:") {
-		t.Fatalf("expected fix hint in output: %q", output)
+
+	var decoded Response
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("failed to parse json output: %v", err)
+	}
+	if decoded.Fix != "start the daemon with: secrets serve &" {
+		t.Fatalf("unexpected fix field in json output: %q", decoded.Fix)
 	}
 }
 

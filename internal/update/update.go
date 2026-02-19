@@ -337,11 +337,8 @@ func CheckForUpdateInBackground(currentVersion string) {
 			return
 		}
 
-		// Only print in human mode
-		if output.HumanMode {
-			fmt.Fprintf(os.Stderr, "\n⚠ Update available: %s → %s\n", info.CurrentVersion, info.LatestVersion)
-			fmt.Fprintf(os.Stderr, "  Run: %s\n\n", info.Command)
-		}
+		// JSON-only CLI mode: suppress background update notices.
+		// Update details are available through explicit update commands.
 	}()
 }
 

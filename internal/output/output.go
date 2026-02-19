@@ -1,6 +1,5 @@
 // Package output provides HATEOAS-style responses for the secrets CLI.
-// By default, all output is JSON for agent consumption.
-// Use --human flag for human-readable output.
+// All output is JSON for agent consumption.
 package output
 
 import (
@@ -44,12 +43,6 @@ type UpdateInfo struct {
 	Command        string `json:"command,omitempty"`
 }
 
-// Global flags for output modes.
-var (
-	HumanMode    bool   // Deprecated: use OutputFormat instead
-	OutputFormat string // json, table, or raw
-)
-
 // Version info (set by ldflags).
 var (
 	Version   = "dev"
@@ -57,22 +50,11 @@ var (
 	BuildDate = "unknown"
 )
 
-// Print outputs the response using the configured formatter.
+// Print outputs the response in JSON.
 func Print(r Response) {
-	// Handle legacy HumanMode flag for backwards compatibility.
-	var mode OutputMode
-	if HumanMode {
-		mode = ModeTable
-	} else if OutputFormat != "" {
-		mode = OutputMode(OutputFormat)
-	}
-	// If neither flag is set, GetFormatter will auto-detect.
-
-	formatter := GetFormatter(mode)
-	if err := formatter.Format(r); err != nil {
+	if err := printJSON(r); err != nil {
 		// Fallback to simple error print if formatting fails.
 		fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-		_ = printJSON(r)
 	}
 }
 
@@ -170,43 +152,6 @@ func printJSON(r Response) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(r)
-}
-
-func printHuman(r Response) {
-	if r.OK {
-		if r.Result != nil {
-			printData(r.Result)
-		}
-	} else if r.Error != nil {
-		fmt.Printf("✗ Error: %s\n", r.Error.Message)
-		if r.Fix != "" {
-			fmt.Printf("  Fix: %s\n", r.Fix)
-		}
-	}
-
-	// Print available actions.
-	if len(r.NextActions) > 0 {
-		fmt.Println("\nNext steps:")
-		for _, a := range r.NextActions {
-			fmt.Printf("  → %s\n", a.Description)
-			fmt.Printf("    $ %s\n", a.Command)
-		}
-	}
-}
-
-func printData(data interface{}) {
-	switch v := data.(type) {
-	case string:
-		fmt.Println(v)
-	case map[string]interface{}:
-		for key, val := range v {
-			fmt.Printf("  %s: %v\n", key, val)
-		}
-	default:
-		// Fall back to JSON for complex types.
-		b, _ := json.MarshalIndent(data, "  ", "  ")
-		fmt.Println(string(b))
-	}
 }
 
 const defaultFix = "Review the error details and run `secrets --help` for usage."

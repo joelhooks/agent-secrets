@@ -22,7 +22,6 @@ var scanCmd = &cobra.Command{
 	Long: `Scan files and directories for exposed secrets using pattern matching.
 
 By default, scans recursively and outputs JSON results.
-Use --human for readable output.
 
 Examples:
   secrets scan                                    # Scan current directory

@@ -32,7 +32,7 @@
       "title": "Remove TTY detection and legacy output format flags — JSON always",
       "description": "Per cli-design standard: JSON is the only output format. No --human, no --output, no TTY auto-detection.\n\nChanges:\n1. `cmd/secrets/root.go`:\n   - Remove `--human` flag\n   - Remove `--output` flag\n   - Remove `output.HumanMode` and `output.OutputFormat` references\n2. `internal/output/formatter.go`:\n   - Remove TTY detection (`isTerminal`)\n   - `GetFormatter()` always returns `JSONFormatter`\n   - Remove `ValidateMode()` (no longer needed)\n   - Remove `OutputMode` type and constants (ModeJSON, ModeTable, ModeRaw)\n3. `internal/output/table.go` — delete this file entirely (no table output)\n4. `internal/output/raw.go` — keep for internal use by lease command but remove from formatter system\n5. `internal/output/output.go`:\n   - Remove `HumanMode` and `OutputFormat` global vars\n   - Simplify `Print()` to always use JSON\n   - Remove `printHuman()` and `printData()` functions\n6. `internal/output/formatter_test.go` — update tests if they exist\n\nThe Print() function should just JSON-encode to stdout. Simple.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "internal/output/formatter.go",
@@ -88,7 +88,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 2,
-    "lastIteration": "2026-02-19T01:07:21.981Z"
+    "totalIterations": 3,
+    "lastIteration": "2026-02-19T01:12:25.194Z"
   }
 }
