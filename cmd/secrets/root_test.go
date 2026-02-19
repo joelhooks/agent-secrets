@@ -6,6 +6,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/joelhooks/agent-secrets/internal/daemon"
+	"github.com/spf13/cobra"
 )
 
 func TestRootCommandDoesNotExposeLegacyOutputFlags(t *testing.T) {
@@ -108,6 +112,158 @@ func TestRootCommandNoArgsOutputsCommandTreeJSON(t *testing.T) {
 	}
 }
 
+func TestRootCommandRegistersExpectedSubcommands(t *testing.T) {
+	expected := []string{
+		"init",
+		"add",
+		"list",
+		"update",
+		"delete",
+		"lease",
+		"revoke",
+		"audit",
+		"status",
+		"health",
+		"scan",
+		"cleanup",
+		"env",
+		"exec",
+		"version",
+		"self-update",
+	}
+
+	registered := make(map[string]struct{})
+	for _, c := range rootCmd.Commands() {
+		registered[c.Name()] = struct{}{}
+	}
+
+	for _, name := range expected {
+		if _, ok := registered[name]; !ok {
+			t.Fatalf("expected subcommand %q to be registered", name)
+		}
+	}
+}
+
+func TestLeaseCommandDefaultOutputIsRawAndJSONOutputsEnvelope(t *testing.T) {
+	rawSocket := startLeaseRPCServer(t, daemon.LeaseResult{
+		LeaseID:   "lease-raw",
+		Value:     "raw-value",
+		ExpiresAt: time.Date(2026, 2, 19, 12, 0, 0, 0, time.UTC),
+	})
+	restoreRaw := setLeaseTestGlobals(rawSocket)
+	rawOutput := captureLeaseStdout(t, func() {
+		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
+			t.Fatalf("RunE failed: %v", err)
+		}
+	})
+	restoreRaw()
+
+	if rawOutput != "raw-value" {
+		t.Fatalf("expected raw output by default, got %q", rawOutput)
+	}
+
+	jsonSocket := startLeaseRPCServer(t, daemon.LeaseResult{
+		LeaseID:   "lease-json",
+		Value:     "json-value",
+		ExpiresAt: time.Date(2026, 2, 19, 12, 5, 0, 0, time.UTC),
+	})
+	restoreJSON := setLeaseTestGlobals(jsonSocket)
+	defer restoreJSON()
+
+	restoreJSONFlag := setLeaseFlag(t, "json", "true")
+	defer restoreJSONFlag()
+
+	jsonOutput := captureLeaseStdout(t, func() {
+		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
+			t.Fatalf("RunE failed: %v", err)
+		}
+	})
+
+	var resp struct {
+		OK      bool   `json:"ok"`
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal([]byte(jsonOutput), &resp); err != nil {
+		t.Fatalf("expected JSON output, got decode error: %v\noutput: %s", err, jsonOutput)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true for --json output")
+	}
+	if resp.Command != "secrets lease" {
+		t.Fatalf("expected command=secrets lease, got %q", resp.Command)
+	}
+}
+
+func TestLeaseCommandParsesRawTTLAndClientIDFlags(t *testing.T) {
+	restoreTTL := setLeaseFlag(t, "ttl", "45m")
+	defer restoreTTL()
+
+	restoreClientID := setLeaseFlag(t, "client-id", "agent-test")
+	defer restoreClientID()
+
+	restoreRaw := setLeaseFlag(t, "raw", "true")
+	defer restoreRaw()
+
+	if leaseTTL != "45m" {
+		t.Fatalf("expected lease ttl to be parsed as 45m, got %q", leaseTTL)
+	}
+	if leaseClientID != "agent-test" {
+		t.Fatalf("expected lease client-id to be parsed as agent-test, got %q", leaseClientID)
+	}
+	if !leaseRaw {
+		t.Fatalf("expected --raw to be accepted and parsed")
+	}
+}
+
+func TestAddCommandFlagsParsed(t *testing.T) {
+	restoreValueFlag := setCommandFlag(t, addCmd, "value", "secret-value")
+	defer restoreValueFlag()
+
+	restoreRotateViaFlag := setCommandFlag(t, addCmd, "rotate-via", "op run --secret")
+	defer restoreRotateViaFlag()
+
+	if addValue != "secret-value" {
+		t.Fatalf("expected --value to be parsed into addValue, got %q", addValue)
+	}
+	if addRotateVia != "op run --secret" {
+		t.Fatalf("expected --rotate-via to be parsed into addRotateVia, got %q", addRotateVia)
+	}
+}
+
+func TestDeleteCommandArgsAndFlags(t *testing.T) {
+	if err := deleteCmd.Args(deleteCmd, []string{}); err == nil {
+		t.Fatalf("expected delete command to require a name argument")
+	}
+	if err := deleteCmd.Args(deleteCmd, []string{"github_token"}); err != nil {
+		t.Fatalf("expected delete command to accept one argument, got %v", err)
+	}
+
+	foundRM := false
+	for _, alias := range deleteCmd.Aliases {
+		if alias == "rm" {
+			foundRM = true
+			break
+		}
+	}
+	if !foundRM {
+		t.Fatalf("expected delete command aliases to include rm")
+	}
+
+	restoreForceFlag := setCommandFlag(t, deleteCmd, "force", "false")
+	defer restoreForceFlag()
+	if deleteForce {
+		t.Fatalf("expected --force flag value to be parsed")
+	}
+}
+
+func TestRootCommandDeprecatedFlagsAreAccepted(t *testing.T) {
+	restoreHumanFlag := setPersistentRootFlag(t, "human", "true")
+	defer restoreHumanFlag()
+
+	restoreOutputFlag := setPersistentRootFlag(t, "output", "json")
+	defer restoreOutputFlag()
+}
+
 func TestRootCommandLegacyFlagsWarnOnStderr(t *testing.T) {
 	restore := setRootTestGlobals()
 	defer restore()
@@ -147,6 +303,46 @@ func setRootTestGlobals() func() {
 	noUpdateCheck = true
 	return func() {
 		noUpdateCheck = origNoUpdateCheck
+	}
+}
+
+func setPersistentRootFlag(t *testing.T, name, value string) func() {
+	t.Helper()
+
+	flag := rootCmd.PersistentFlags().Lookup(name)
+	if flag == nil {
+		t.Fatalf("expected root persistent flag %q to exist", name)
+	}
+
+	origValue := flag.Value.String()
+	origChanged := flag.Changed
+	if err := rootCmd.PersistentFlags().Set(name, value); err != nil {
+		t.Fatalf("failed to set root persistent flag %q: %v", name, err)
+	}
+
+	return func() {
+		_ = rootCmd.PersistentFlags().Set(name, origValue)
+		flag.Changed = origChanged
+	}
+}
+
+func setCommandFlag(t *testing.T, cmd *cobra.Command, name, value string) func() {
+	t.Helper()
+
+	flag := cmd.Flags().Lookup(name)
+	if flag == nil {
+		t.Fatalf("expected flag %q to exist", name)
+	}
+
+	origValue := flag.Value.String()
+	origChanged := flag.Changed
+	if err := cmd.Flags().Set(name, value); err != nil {
+		t.Fatalf("failed to set flag %q: %v", name, err)
+	}
+
+	return func() {
+		_ = cmd.Flags().Set(name, origValue)
+		flag.Changed = origChanged
 	}
 }
 

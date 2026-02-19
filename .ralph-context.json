@@ -251,6 +251,23 @@
         "prd.json"
       ],
       "learnings": "Technical Discovery: `JSONFormatter.Format` in `internal/output/json.go` was encoding `Response` without normalizing aliases, so direct formatter usage could emit `ok=true` with `success=false`. Setting `r.Success = r.OK` in the formatter aligns it with `printJSON` and preserves backward compatibility.\nGotcha: `ActionsAfterScan(2)` currently returns `ActionImportSecret(\"\", \"\")`, which produces command `secrets add ` (trailing space). Tests now lock this current behavior in `internal/output/output_test.go`; changing it will require updating expectations.\nFiles Context: `internal/output/output_test.go` now covers envelope shape, fix propagation, next_actions serialization, action builders, contextual action sets, deprecation stderr behavior, and print fallback path. `internal/output/json_test.go` covers envelope serialization, omitempty behavior, and fix inclusion. `internal/output/raw_test.go` covers raw outputs for strings/maps/slices/default types/nil and error+fix rendering. `internal/output/json.go` now mirrors `success` from `ok` before encoding."
+    },
+    {
+      "id": "story-mlt171hg",
+      "title": "Test coverage: daemon handlers (list, update, delete)",
+      "status": "completed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "internal/output/json.go",
+        "internal/output/json_test.go",
+        "internal/output/output_test.go",
+        "internal/output/raw_test.go",
+        "prd.json",
+        "progress.txt",
+        "internal/daemon/handlers_test.go"
+      ],
+      "learnings": "Technical Discovery: `internal/daemon/handlers_test.go` can validate CLI remediation behavior indirectly by wrapping handler errors with `output.Error(...)`, while still keeping daemon logic tests isolated. This gives coverage for fix-field expectations (including daemon startup guidance) without changing daemon protocol types.\nGotcha: `handleList()` itself does not return `next_actions`; contextual lease actions are derived from listed secret names at higher layers. Avoid writing brittle tests that expect daemon list results to include command actions unless protocol structs are intentionally extended.\nFiles Context: `internal/daemon/handlers_test.go` now contains the added list/update/delete/error coverage. Existing command-layer next_action/fix behavior remains primarily tested in `cmd/secrets/list_test.go`, `cmd/secrets/delete_test.go`, and `cmd/secrets/update_secret_test.go`."
     }
   ],
   "failures": [

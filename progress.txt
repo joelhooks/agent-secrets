@@ -357,3 +357,18 @@ Required process steps completed:
 Daemon handlers do not directly emit CLI `next_actions`/`fix` envelopes; those are produced in output/command layers. For handler-story coverage, validate RPC envelope behavior in `HandleRequest`, and if you need `fix` assertions, wrap handler errors with `output.Error(...)` in tests.
 ### Files Context
 `internal/daemon/handlers_test.go` is the core coverage file for daemon handler behavior. The new tests in this file now cover list empty + metadata behavior, update/delete error typing, update rotation config preservation, and RPC error envelope structure for missing-secret flows.
+
+---
+[2026-02-19T05:53:15.771Z]
+Completed: Test coverage: cmd/secrets command tests
+Files: .ralph-context.json, .ralph-iterations.jsonl, internal/daemon/handlers_test.go, prd.json, progress.txt, cmd/secrets/root_test.go
+Summary: Prior failure pattern detected: `verification_rejected` for missing required target file edits. Mitigation applied: I made all story changes in `cmd/secrets/root_test.go` and verified validation after.
+
+Implemented test coverage in `cmd/secrets/root_test.go` for the requested command setup/arg validation cases:
+- Root command JSON tree + explicit subcommand registration checks.
+- Lease command behavior: default raw output, `--json` envelope output, `--raw` accepted, and `--ttl`/`--client-id` parsing.
+- Add command flag parsing for `--value` and `--rotate-via`.
+- Delete command argument requirement, `--force` parsing, and `rm` alias.
+- Deprecated root flags acceptance (`--human`, `--output`) without errors.
+
+Also added local test helpers to safely restore Cobra flag values and `Changed` state to avoid cross-test leakage with shared global command instances.

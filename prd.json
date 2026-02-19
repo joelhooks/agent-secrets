@@ -150,7 +150,7 @@
       "title": "Test coverage: cmd/secrets command tests",
       "description": "Add tests for cobra command setup and argument validation in `cmd/secrets/root_test.go`:\n\n1. **Root command tests:**\n   - Running with no args outputs JSON command tree (verify ok, result.commands array)\n   - Verify all expected subcommands are registered\n\n2. **Lease command tests:**\n   - Default output is raw (no --json flag)\n   - --json flag produces JSON envelope\n   - --raw flag is accepted (deprecated no-op) \n   - --ttl and --client-id flags are parsed\n\n3. **Add command tests:**\n   - --value flag is parsed\n   - --rotate-via flag is parsed\n\n4. **Delete command tests:**\n   - Requires name argument\n   - --force flag is parsed\n   - Aliases include \"rm\"\n\n5. **Deprecated flag tests:**\n   - --human flag accepted without error\n   - --output flag accepted without error\n   - These are no-ops but shouldn't crash",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "cmd/secrets/root_test.go"
@@ -171,7 +171,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 12,
-    "lastIteration": "2026-02-19T05:49:22.855Z"
+    "totalIterations": 13,
+    "lastIteration": "2026-02-19T05:53:15.770Z"
   }
 }
