@@ -42,6 +42,9 @@ The `secrets` CLI must be installed and in your PATH:
 
 # Initialize the encrypted store (run once per machine)
 secrets init
+
+# Discover command tree and capabilities
+secrets
 ```
 
 This creates:
@@ -52,7 +55,19 @@ This creates:
 
 ## Core Workflows
 
-### 1. Adding Secrets
+### 1. Discover Commands and Secret Names
+
+Use discovery-first commands before requesting a lease:
+
+```bash
+# Root command returns JSON command tree with usage and next_actions
+secrets
+
+# List all stored secret names and lease metadata
+secrets list
+```
+
+### 2. Adding Secrets
 
 **Interactive mode** (prompts for secret value):
 ```bash
@@ -71,11 +86,11 @@ echo "sk-ant-api03-..." | secrets add anthropic_key
 cat service-account.json | secrets add gcp_credentials
 ```
 
-### 2. Leasing Secrets
+### 3. Leasing Secrets
 
-**Get a lease** (returns ONLY the secret value, perfect for shell export):
+`secrets lease <name>` returns ONLY the raw secret value by default, so no extra flags are needed for shell export:
 ```bash
-# Default 1 hour TTL
+# Primary pattern
 export GITHUB_TOKEN=$(secrets lease github_token)
 
 # Custom TTL
@@ -83,11 +98,44 @@ export ANTHROPIC_API_KEY=$(secrets lease anthropic_key --ttl 30m)
 
 # With client ID for audit trail
 export OPENAI_KEY=$(secrets lease openai_key --ttl 2h --client-id "claude-code-worker")
+
+# Use --json when you need lease metadata and next_actions
+secrets lease github_token --json
 ```
 
-**Important**: Secrets cannot be accessed directly—you must acquire a lease. Leases automatically expire and are cleaned up by a background goroutine.
+Example JSON envelope (`--json`):
+```json
+{
+  "ok": true,
+  "command": "secrets lease",
+  "result": {
+    "lease_id": "lease-123",
+    "secret_name": "github_token",
+    "value": "ghp_xxx",
+    "expires_at": "2026-02-19T12:00:00Z",
+    "ttl": "1h",
+    "client_id": "claude-code-worker"
+  },
+  "next_actions": [
+    {"command": "export GITHUB_TOKEN=$(secrets lease github_token)", "description": "Export to environment"},
+    {"command": "secrets revoke lease-123", "description": "Revoke this lease"}
+  ]
+}
+```
 
-### 3. Checking Status
+Error responses include a concrete `fix` field:
+```json
+{
+  "ok": false,
+  "command": "secrets lease",
+  "error": {"message": "failed to acquire lease: ... secret not found", "code": "generic_error"},
+  "fix": "Check available secrets: secrets status"
+}
+```
+
+**Important**: Secrets cannot be accessed directly. You must acquire a lease, and leases auto-expire.
+
+### 4. Checking Status
 
 View daemon and lease status:
 ```bash
@@ -100,7 +148,7 @@ Output shows:
 - Number of stored secrets
 - Active lease count
 
-### 4. Audit Trail
+### 5. Audit Trail
 
 View the append-only audit log:
 ```bash
@@ -118,7 +166,7 @@ Logs include:
 - Rotation events
 - Killswitch activations
 
-### 5. Revocation
+### 6. Revocation
 
 **Revoke specific lease**:
 ```bash
@@ -142,9 +190,10 @@ Use the killswitch when:
 In your agent's environment setup script:
 ```bash
 # Session initialization
-export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "claude-code")
-export ANTHROPIC_API_KEY=$(secrets lease anthropic_key --ttl 1h --client-id "claude-code")
-export OPENAI_API_KEY=$(secrets lease openai_key --ttl 1h --client-id "claude-code")
+secrets list
+export GITHUB_TOKEN=$(secrets lease github_token)
+export ANTHROPIC_API_KEY=$(secrets lease anthropic_key)
+export OPENAI_API_KEY=$(secrets lease openai_key)
 
 # Now agent has time-bounded access
 gh api /user
@@ -247,10 +296,13 @@ If heartbeat endpoint becomes unreachable for `timeout` duration, configured fai
 
 | Command | Description | Example |
 |---------|-------------|---------|
+| `secrets` | Show command tree for discovery | `secrets` |
 | `init` | Initialize encrypted store | `secrets init` |
+| `list` | List stored secret names | `secrets list` |
 | `add <name>` | Add secret (interactive or stdin) | `secrets add github_token` |
 | `add <name> --rotate-via <cmd>` | Add secret with rotation hook | `secrets add token --rotate-via "gh auth refresh"` |
-| `lease <name>` | Get time-bounded lease (default 1h) | `secrets lease github_token` |
+| `lease <name>` | Get raw secret value (default 1h lease) | `secrets lease github_token` |
+| `lease <name> --json` | Get lease envelope + next actions | `secrets lease github_token --json` |
 | `lease <name> --ttl <duration>` | Get lease with custom TTL | `secrets lease api_key --ttl 30m` |
 | `lease <name> --client-id <id>` | Get lease with audit identifier | `secrets lease token --client-id "worker-123"` |
 | `status` | Show daemon and lease status | `secrets status` |
@@ -277,8 +329,7 @@ chmod 600 ~/.agent-secrets/identity.age
 
 **Forgot which secrets are stored?**
 ```bash
-# Audit log shows all add operations
-secrets audit | grep '"event":"secret_added"'
+secrets list
 ```
 
 **Need to rotate everything immediately?**
@@ -310,9 +361,9 @@ SECRETS_CLI="/home/joel/Code/joelhooks/agent-secrets/secrets"
 
 # Lease credentials for 2-hour work session
 echo "🔐 Acquiring credentials..."
-export GITHUB_TOKEN=$($SECRETS_CLI lease github_token --ttl 2h --client-id "claude-code-$(date +%s)")
-export ANTHROPIC_API_KEY=$($SECRETS_CLI lease anthropic_key --ttl 2h --client-id "claude-code-$(date +%s)")
-export VERCEL_TOKEN=$($SECRETS_CLI lease vercel_token --ttl 2h --client-id "claude-code-$(date +%s)")
+export GITHUB_TOKEN=$($SECRETS_CLI lease github_token)
+export ANTHROPIC_API_KEY=$($SECRETS_CLI lease anthropic_key)
+export VERCEL_TOKEN=$($SECRETS_CLI lease vercel_token)
 
 # Verify credentials loaded
 echo "✅ Credentials acquired (expire in 2h)"

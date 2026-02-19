@@ -79,7 +79,7 @@
       "title": "Update README, SKILL.md, and AGENTS.md for new CLI design",
       "description": "Update all documentation to reflect the new agent-first CLI design:\n\n1. **README.md** — Rewrite quick start and examples:\n   - Show `secrets lease name` returns raw value by default\n   - Show `export TOKEN=$(secrets lease github_token)` as the primary pattern\n   - Show JSON envelope examples with `--json`\n   - Show `secrets` (root) returns command tree\n   - Remove references to `--raw`, `--human`, `--output` flags\n   - Add `secrets list` to command reference\n\n2. **skills/secret-management/SKILL.md** — Update the agent skill doc:\n   - Emphasize: `secrets lease name` → raw value, no flags needed\n   - Show `secrets list` for discovery\n   - Show `secrets` root for command tree\n   - Update all examples\n   - Remove `--raw` references\n\n3. **AGENTS.md** — Update any agent-specific notes about output format",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "README.md",
@@ -89,7 +89,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 6,
-    "lastIteration": "2026-02-19T01:34:58.088Z"
+    "totalIterations": 7,
+    "lastIteration": "2026-02-19T01:39:14.798Z"
   }
 }

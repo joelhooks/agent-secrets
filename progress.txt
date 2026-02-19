@@ -214,3 +214,34 @@ Executed required post-steps:
 `secrets lease` defaults to raw output; if future HATEOAS actions are intended for structured machine chaining, commands should include `--json` explicitly.
 ### Files Context
 `cmd/secrets/list.go` formats `secrets list` envelope and per-secret `next_actions`; `internal/daemon/handlers.go` builds RPC `secrets.list` metadata (`ActiveLeases`, ordering); `internal/daemon/handlers_test.go` now enforces deterministic list ordering and lease-count coverage.
+
+---
+[2026-02-19T01:39:14.799Z]
+Completed: Update README, SKILL.md, and AGENTS.md for new CLI design
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/list.go, cmd/secrets/list_test.go, cmd/secrets/root.go, cmd/secrets/root_test.go, internal/daemon/handlers.go, internal/daemon/handlers_test.go, internal/daemon/protocol.go, prd.json, progress.txt, AGENTS.md, README.md, skills/secret-management/SKILL.md
+Summary: Updated docs for the new agent-first CLI design across `README.md`, `skills/secret-management/SKILL.md`, and `AGENTS.md`.
+
+Prior failure pattern detected: `verification_rejected`. Mitigation: I explicitly modified the required target files (`README.md`, `skills/secret-management/SKILL.md`) and verified they are present in the diff.
+
+What changed:
+- `README.md`:
+  - Quick start now uses `export TOKEN=$(secrets lease github_token)` as the primary pattern and shows `secrets` + `secrets list` discovery (`README.md:50`).
+  - Added JSON envelope examples for root, lease `--json`, and error `fix` field (`README.md:82`).
+  - Added `secrets` and `secrets list` command reference entries (`README.md:168`, `README.md:196`).
+  - Updated lease docs to raw-by-default + `--json` opt-in (`README.md:203`).
+- `skills/secret-management/SKILL.md`:
+  - Added discovery-first workflow with `secrets` and `secrets list` (`skills/secret-management/SKILL.md:58`).
+  - Emphasized raw-default lease behavior and added `--json` envelope + `fix` examples (`skills/secret-management/SKILL.md:89`).
+  - Updated command reference to include `secrets`, `list`, and `lease --json` (`skills/secret-management/SKILL.md:295`).
+  - Replaced “forgot secrets” troubleshooting with `secrets list` (`skills/secret-management/SKILL.md:330`).
+- `AGENTS.md`:
+  - Added `secrets` and `secrets list` to command table (`AGENTS.md:63`).
+  - Added explicit output conventions (JSON envelope, lease raw default, `--json`, `fix` field) (`AGENTS.md:76`).
+  - Updated local run and quick workflow examples to match new defaults (`AGENTS.md:95`, `AGENTS.md:140`).
+
+Validation executed and passed:
+- `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...`
+
+Required post-steps executed:
+- Stored learning with `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+- Sent event with `openclaw system event --mode now --text "Ralph: completed Update README, SKILL.md, and AGENTS.md for new CLI design"`

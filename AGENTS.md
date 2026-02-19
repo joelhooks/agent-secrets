@@ -60,9 +60,11 @@ agent-secrets/
 
 | Command | Description |
 |---------|-------------|
+| `secrets` | Show self-documenting command tree with next actions |
 | `secrets init` | Initialize encrypted store (~/.agent-secrets/) |
 | `secrets add <name>` | Add a secret (interactive, stdin, or with rotation hook) |
-| `secrets lease <name>` | Get time-bounded lease (returns secret value) |
+| `secrets list` | List stored secret names for discovery |
+| `secrets lease <name>` | Get time-bounded lease (returns raw secret value by default) |
 | `secrets revoke <id>` | Revoke specific lease |
 | `secrets revoke --all` | KILLSWITCH: revoke all leases |
 | `secrets status` | Show daemon status and active leases |
@@ -70,6 +72,13 @@ agent-secrets/
 | `secrets env` | Generate .env file from .secrets.json config |
 | `secrets exec -- <cmd>` | Run command with secrets loaded, auto-cleanup |
 | `secrets cleanup` | Remove expired lease environment files |
+
+## Output Conventions
+
+- CLI responses are JSON envelopes by default (`ok`, `command`, `result`, `next_actions`).
+- `secrets lease <name>` is the exception: it returns the raw secret value by default for shell export.
+- Use `secrets lease <name> --json` when you need lease metadata and `next_actions`.
+- Error responses include a `fix` field with a concrete remediation command.
 
 ## Development
 
@@ -84,7 +93,7 @@ make test
 make lint
 
 # Run locally
-./secrets --help
+./secrets
 ```
 
 ## Release Process
@@ -129,7 +138,7 @@ goreleaser build --snapshot --clean
 ### Quick Workflow (Single Secret)
 ```bash
 # 1. Lease credential
-export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h --client-id "task-123")
+export GITHUB_TOKEN=$(secrets lease github_token)
 
 # 2. Do work
 git push origin main

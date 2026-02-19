@@ -42,37 +42,106 @@ sudo mv secrets /usr/local/bin/
 go install github.com/joelhooks/agent-secrets/cmd/secrets@latest
 ```
 
-**Verify:**
+**Verify (self-documenting root command):**
 ```bash
-secrets --help
+secrets
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Initialize store and start daemon (one-time setup)
+# 1) Initialize store and start daemon (one-time setup)
 secrets init
-secrets serve &          # Start daemon in background
+secrets serve &
 
-# 2. Add secrets
+# 2) Add secrets
 secrets add github_token --rotate-via "gh auth refresh"
 secrets add anthropic_key
 echo "sk-ant-..." | secrets add openai_key
 
-# 3. Get a lease (returns secret value, starts TTL timer)
-export GITHUB_TOKEN=$(secrets lease github_token --ttl 1h)
+# 3) Discover commands and available secrets
+secrets
+secrets list
 
-# View status
+# 4) Lease a secret (default output is raw value, ideal for exports)
+export GITHUB_TOKEN=$(secrets lease github_token)
+
+# 5) Request JSON envelope when you need metadata + next actions
+secrets lease github_token --json
+
+# 6) Inspect state and logs
 secrets status
-
-# View audit log
 secrets audit --tail 20
 
-# Emergency: revoke all leases
+# 7) Emergency killswitch
 secrets revoke --all
 ```
 
 > **Note:** The daemon must be running for most commands to work. The install script auto-starts it, but if you see "daemon not running" errors, run `secrets serve &`.
+
+## JSON Envelope Pattern
+
+All commands return a JSON response envelope with `ok`, `command`, `result`, and `next_actions`, except `secrets lease <name>` which returns only the raw secret value by default.
+
+```bash
+# Root command returns command tree
+secrets
+```
+
+```json
+{
+  "ok": true,
+  "command": "secrets",
+  "result": {
+    "description": "Portable credential management for AI agents",
+    "version": "dev",
+    "commands": [
+      {"name": "init", "description": "Initialize the secrets store", "usage": "secrets init"},
+      {"name": "list", "description": "List stored secret names", "usage": "secrets list"},
+      {"name": "lease", "description": "Get a secret value (raw by default)", "usage": "secrets lease <name> [--ttl 1h] [--client-id agent-x] [--json]"}
+    ]
+  },
+  "next_actions": [
+    {"command": "secrets status", "description": "Check daemon status"}
+  ]
+}
+```
+
+```bash
+# Lease envelope (opt in)
+secrets lease github_token --json
+```
+
+```json
+{
+  "ok": true,
+  "command": "secrets lease",
+  "result": {
+    "lease_id": "lease-123",
+    "secret_name": "github_token",
+    "value": "ghp_xxx",
+    "expires_at": "2026-02-19T12:00:00Z",
+    "ttl": "1h",
+    "client_id": "my-agent"
+  },
+  "next_actions": [
+    {"command": "export GITHUB_TOKEN=$(secrets lease github_token)", "description": "Export to environment"},
+    {"command": "secrets revoke lease-123", "description": "Revoke this lease"}
+  ]
+}
+```
+
+```json
+{
+  "ok": false,
+  "command": "secrets lease",
+  "error": {
+    "message": "failed to acquire lease: ... secret not found",
+    "code": "generic_error"
+  },
+  "fix": "Check available secrets: secrets status"
+}
+```
 
 ## Architecture
 
@@ -96,6 +165,13 @@ secrets revoke --all
 
 ## Commands
 
+### `secrets`
+Show a self-documenting command tree for agent discovery.
+
+```bash
+secrets
+```
+
 ### `secrets init`
 Initialize the encrypted store. Creates:
 - `~/.agent-secrets/identity.age` — X25519 private key
@@ -117,11 +193,21 @@ echo "secret-value" | secrets add api_key
 cat credentials.txt | secrets add service_account
 ```
 
-### `secrets lease <name>`
-Acquire a time-bounded lease on a secret. Returns **only** the secret value (perfect for shell piping).
+### `secrets list`
+List stored secret names and lease-related metadata for discovery.
 
 ```bash
-# Default 1 hour TTL
+secrets list
+```
+
+### `secrets lease <name>`
+Acquire a time-bounded lease on a secret.
+
+- Default output: **raw secret value only** (best for shell exports)
+- `--json`: full envelope with lease metadata and `next_actions`
+
+```bash
+# Primary pattern: raw value for shell export
 export TOKEN=$(secrets lease github_token)
 
 # Custom TTL
@@ -129,6 +215,9 @@ export TOKEN=$(secrets lease github_token --ttl 30m)
 
 # Custom client ID (for audit)
 export TOKEN=$(secrets lease github_token --client-id "my-agent")
+
+# JSON envelope for agents
+secrets lease github_token --json
 ```
 
 ### `secrets revoke [lease-id]`
@@ -158,10 +247,23 @@ Show daemon status.
 
 ```bash
 secrets status
-# Running: true
-# Started: 2024-01-15T10:30:00Z
-# Secrets: 5
-# Active Leases: 2
+```
+
+```json
+{
+  "ok": true,
+  "command": "secrets status",
+  "result": {
+    "running": true,
+    "secrets_count": 5,
+    "active_leases": 2,
+    "started_at": "2026-02-19T10:30:00Z",
+    "uptime": "1h 15m"
+  },
+  "next_actions": [
+    {"command": "secrets lease <name>", "description": "Get a secret value"}
+  ]
+}
 ```
 
 ### `secrets env`

@@ -126,7 +126,7 @@
     {
       "id": "story-mlsr197b",
       "title": "Add list command to show all stored secret names",
-      "status": "failed",
+      "status": "completed",
       "filesModified": [
         ".ralph-context.json",
         ".ralph-iterations.jsonl",
@@ -145,7 +145,7 @@
         "internal/daemon/handlers_test.go",
         "internal/daemon/protocol.go"
       ],
-      "learnings": "[verification_rejected] ok  \tgithub.com/joelhooks/agent-secrets/cmd/secrets\t(cached)\n?   \tgithub.com/joelhooks/agent-secrets/internal/adapters\t[no test files]\nok  \tgithub.com/joelhooks/agent-secrets/internal/adapters/vercel\t(cached)\nok  \tgithub.com/joelhooks/agent-secrets/internal/audit\t(cached)\nok  \tgithub.com/joelhooks/a"
+      "learnings": "Technical Discovery: `handleList()` in `internal/daemon/handlers.go` must sort by `SecretMetadata.Name` because `store.List()` is map-backed and nondeterministic; otherwise list ordering and downstream `next_actions` ordering can drift between runs.\nGotcha: Even with daemon-side sorting, `cmd/secrets/list.go` intentionally keeps client-side sorting so older daemons still produce deterministic CLI output; removing it can regress compatibility in mixed-version environments.\nFiles Context: `cmd/secrets/list.go` handles RPC decode and HATEOAS `next_actions`; `internal/daemon/handlers.go` computes `ActiveLeases` and sorted metadata; `internal/daemon/handlers_test.go` contains the new TDD regression test for sorted ordering."
     }
   ],
   "failures": [
