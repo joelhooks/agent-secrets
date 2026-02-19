@@ -21,7 +21,7 @@
       "title": "Make lease default to raw value output",
       "description": "Change `secrets lease` to output ONLY the secret value by default (no JSON envelope). This is the #1 agent UX issue — agents always forget `--raw` and expect to get the value directly.\n\nChanges:\n1. `cmd/secrets/lease.go`:\n   - Flip the default: raw output is now default behavior\n   - Remove `--raw` flag (it's now the default)\n   - Add `--json` flag to opt INTO the full JSON envelope when needed\n   - When default (no --json): `fmt.Print(result.Value)` — just the value, no newline, perfect for `$(secrets lease name)`\n   - When `--json`: output the full HATEOAS JSON envelope with ok/command/result/next_actions\n2. Update the help text / Long description to reflect this change\n3. Update `internal/output/output.go` action helpers that reference `--raw` (like `ActionLease`) — remove `--raw` references, add `--json` where relevant\n\nThe goal: `export TOKEN=$(secrets lease github_token)` just works without any flags.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "cmd/secrets/lease.go"
@@ -88,7 +88,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 1,
-    "lastIteration": "2026-02-19T01:03:26.430Z"
+    "totalIterations": 2,
+    "lastIteration": "2026-02-19T01:07:21.981Z"
   }
 }

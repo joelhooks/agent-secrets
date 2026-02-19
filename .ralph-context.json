@@ -1,0 +1,32 @@
+{
+  "stories": [
+    {
+      "id": "story-mlsqzwdh",
+      "title": "Refactor response envelope to match cli-design standard",
+      "status": "completed",
+      "filesModified": [
+        "cmd/secrets/daemon_start_unix.go",
+        "cmd/secrets/daemon_start_windows.go",
+        "cmd/secrets/update.go",
+        "cmd/secrets/add.go",
+        "cmd/secrets/audit.go",
+        "cmd/secrets/cleanup.go",
+        "cmd/secrets/env.go",
+        "cmd/secrets/exec.go",
+        "cmd/secrets/health.go",
+        "cmd/secrets/init.go",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/revoke.go",
+        "cmd/secrets/scan.go",
+        "cmd/secrets/serve.go",
+        "cmd/secrets/status.go",
+        "internal/output/output.go",
+        "internal/output/raw.go",
+        "internal/output/table.go",
+        "internal/types/exitcodes.go"
+      ],
+      "learnings": "Technical Discovery: `internal/update/update.go` depends on `output.UpdateInfo` as a type, even after removing `Response.Update`; keeping `UpdateInfo` as a standalone type in `internal/output/output.go` avoids breaking update-check flows while still conforming the envelope.\nGotcha: `output.Success` no longer carries a top-level message, so any user-facing status text must be placed inside `result` (for example as `result.message`) if the command needs it. Also, removing `Action.Name`/`Dangerous` requires updating every inline `output.Action{...}` literal.\nFiles Context: `internal/output/output.go` is the contract center (envelope types + helper constructors + action builders). `internal/output/raw.go` and `internal/output/table.go` must stay aligned with `Response` fields. Command wiring is concentrated under `cmd/secrets/*.go` where each `output.Success/Error/ErrorMsg` call now passes an explicit command string. `internal/types/exitcodes.go` now provides string code mapping via `ErrorCodeFromExitCode` for `error.code`."
+    }
+  ],
+  "failures": []
+}

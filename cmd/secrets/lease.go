@@ -15,7 +15,7 @@ import (
 var (
 	leaseTTL      string
 	leaseClientID string
-	leaseRaw      bool
+	leaseJSON     bool
 )
 
 var leaseCmd = &cobra.Command{
@@ -24,13 +24,13 @@ var leaseCmd = &cobra.Command{
 	Long: `Acquire a lease on a secret with a specified time-to-live. The lease grants
 temporary access to the secret value.
 
-By default, returns a JSON response with lease details and available actions.
-Use --raw to output ONLY the secret value (for piping to shell commands).
+By default, outputs ONLY the secret value (no newline), perfect for command substitution.
+Use --json to output the full HATEOAS JSON envelope with lease details and next actions.
 
 Examples:
-  secrets lease github_token                    # JSON response with details
-  export TOKEN=$(secrets lease github_token --raw)  # Shell export
-  secrets lease api_key --ttl 30m               # Custom TTL`,
+  export TOKEN=$(secrets lease github_token)     # Shell export (default raw value)
+  secrets lease github_token --json              # JSON response with details
+  secrets lease api_key --ttl 30m                # Custom TTL`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -80,8 +80,8 @@ Examples:
 			return nil
 		}
 
-		// --raw flag: output ONLY the secret value (for piping)
-		if leaseRaw {
+		// Default behavior: output ONLY the secret value (for piping/substitution)
+		if !leaseJSON {
 			fmt.Print(result.Value)
 			return nil
 		}
@@ -102,7 +102,7 @@ Examples:
 		actions := []output.Action{
 			{
 				Description: "Export to environment",
-				Command:     fmt.Sprintf("export %s=$(secrets lease %s --raw)", envVarName, name),
+				Command:     fmt.Sprintf("export %s=$(secrets lease %s)", envVarName, name),
 			},
 			{
 				Description: "Revoke this lease",
@@ -120,5 +120,5 @@ Examples:
 func init() {
 	leaseCmd.Flags().StringVar(&leaseTTL, "ttl", "1h", "Time-to-live for the lease (e.g., 1h, 30m, 2h30m)")
 	leaseCmd.Flags().StringVar(&leaseClientID, "client-id", "", "Client identifier (defaults to hostname)")
-	leaseCmd.Flags().BoolVar(&leaseRaw, "raw", false, "Output only the secret value (for piping to shell)")
+	leaseCmd.Flags().BoolVar(&leaseJSON, "json", false, "Output full JSON envelope with lease metadata and next actions")
 }

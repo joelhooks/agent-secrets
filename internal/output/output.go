@@ -265,20 +265,20 @@ func ActionAddWithRotation() Action {
 }
 
 func ActionLease(name string) Action {
-	cmd := "secrets lease <name>"
+	cmd := "secrets lease <name> --json"
 	if name != "" {
-		cmd = fmt.Sprintf("secrets lease %s", name)
+		cmd = fmt.Sprintf("secrets lease %s --json", name)
 	}
 	return Action{
-		Description: "Get a time-bounded lease for a secret",
+		Description: "Get a time-bounded lease for a secret (JSON response)",
 		Command:     cmd,
 	}
 }
 
 func ActionLeaseWithTTL(name, ttl string) Action {
 	return Action{
-		Description: fmt.Sprintf("Lease %s with custom TTL", name),
-		Command:     fmt.Sprintf("secrets lease %s --ttl %s", name, ttl),
+		Description: fmt.Sprintf("Lease %s with custom TTL (JSON response)", name),
+		Command:     fmt.Sprintf("secrets lease %s --ttl %s --json", name, ttl),
 	}
 }
 

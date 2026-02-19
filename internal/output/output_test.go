@@ -136,6 +136,23 @@ func TestErrorWithCodeUsesMappedCode(t *testing.T) {
 	}
 }
 
+func TestActionLeaseIncludesJSONFlag(t *testing.T) {
+	action := ActionLease("github_token")
+	if !strings.Contains(action.Command, "--json") {
+		t.Fatalf("expected lease action to include --json, got %q", action.Command)
+	}
+}
+
+func TestActionLeaseWithTTLIncludesJSONFlag(t *testing.T) {
+	action := ActionLeaseWithTTL("github_token", "30m")
+	if !strings.Contains(action.Command, "--json") {
+		t.Fatalf("expected lease with ttl action to include --json, got %q", action.Command)
+	}
+	if !strings.Contains(action.Command, "--ttl 30m") {
+		t.Fatalf("expected lease with ttl action to include ttl, got %q", action.Command)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 

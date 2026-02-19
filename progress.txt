@@ -41,3 +41,24 @@ Also completed required ops:
 - Sent completion event via `openclaw system event ...`
 
 No forbidden files were modified (`prd.json`, `progress.txt` unchanged).
+
+---
+[2026-02-19T01:07:21.981Z]
+Completed: Make lease default to raw value output
+Files: bin/secrets, cmd/secrets/add.go, cmd/secrets/audit.go, cmd/secrets/cleanup.go, cmd/secrets/env.go, cmd/secrets/exec.go, cmd/secrets/health.go, cmd/secrets/init.go, cmd/secrets/lease.go, cmd/secrets/revoke.go, cmd/secrets/scan.go, cmd/secrets/serve.go, cmd/secrets/status.go, cmd/secrets/update.go, internal/output/output.go, internal/output/output_test.go, internal/output/raw.go, internal/output/table.go, internal/types/exitcodes.go, prd.json, progress.txt
+Summary: Implemented `story-mlsr055z` with TDD: added failing tests first, then flipped `secrets lease` to raw-by-default and added `--json` opt-in.
+
+What changed:
+- `cmd/secrets/lease.go`: replaced `--raw` with `--json`, updated help/Long text, made default output `fmt.Print(result.Value)` (no newline), and updated export next_action to `export VAR=$(secrets lease <name>)`.
+- `internal/output/output.go`: updated `ActionLease` and `ActionLeaseWithTTL` to include `--json` so HATEOAS action chains remain JSON-friendly.
+- Added tests in `cmd/secrets/lease_test.go` for:
+  - `--json` flag exists and `--raw` is removed
+  - default lease output is raw value only
+  - `--json` outputs envelope fields (`ok`, `command`, `next_actions`)
+- Added tests in `internal/output/output_test.go` to assert lease action helpers include `--json`.
+
+Required side tasks completed:
+- Stored learning in hivemind (`mem-a5852b8c7807ad6a`).
+- Sent completion event via `openclaw system event`.
+
+Note: I observed untracked `.ralph-context.json` and `.ralph-iterations.jsonl` in `git status`; I did not modify them.
