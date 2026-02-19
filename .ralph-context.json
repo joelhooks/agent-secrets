@@ -189,6 +189,34 @@
         "prd.json"
       ],
       "learnings": "Technical Discovery: `internal/daemon/handlers.go` must enforce update-only behavior by checking existence before mutation; in this codebase `store.Add` rejects duplicates and does not overwrite, so `handleUpdate` should use `store.Get` then `store.Update` with optional `RotateVia` handling.\nGotcha: `secrets update` is now secret mutation, not binary updater. Any place that surfaces updater commands must use `secrets self-update` (`cmd/secrets/update.go`, `cmd/secrets/root.go`, `internal/output/output.go`, `internal/update/update.go`) or users will get wrong guidance.\nFiles Context: Command wiring and command-tree docs live in `cmd/secrets/root.go`. Secret mutation CLI logic is in `cmd/secrets/update_secret.go` and `cmd/secrets/delete.go`. RPC API surface is in `internal/daemon/protocol.go` and execution logic in `internal/daemon/handlers.go`. Behavioral coverage was added in `internal/daemon/handlers_test.go`, `cmd/secrets/update_secret_test.go`, `cmd/secrets/delete_test.go`, and `cmd/secrets/root_test.go`."
+    },
+    {
+      "id": "story-mlsvicrr",
+      "title": "Backwards compatibility: restore deprecated flags with warnings",
+      "status": "completed",
+      "filesModified": [
+        "cmd/secrets/delete.go",
+        "cmd/secrets/delete_test.go",
+        "cmd/secrets/root.go",
+        "cmd/secrets/root_test.go",
+        "cmd/secrets/update.go",
+        "cmd/secrets/update_secret.go",
+        "cmd/secrets/update_secret_test.go",
+        "internal/daemon/handlers.go",
+        "internal/daemon/handlers_test.go",
+        "internal/daemon/protocol.go",
+        "internal/output/output.go",
+        "internal/update/update.go",
+        "prd.json",
+        "progress.txt",
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "README.md",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/lease_test.go",
+        "internal/output/output_test.go"
+      ],
+      "learnings": "Technical Discovery: In this Cobra setup, deprecated no-op flags are best handled as hidden flags plus explicit warning emission in pre-run/run paths. Using `cmd.Flags().Changed(\"...\")` correctly detects explicit user use, but tests must restore `pflag.Flag.Changed` state when commands are reused across tests.\nGotcha: If a command checks `Flags().Changed(...)`, test helpers must reset both the flag value and the `Changed` bit; otherwise later tests can get stale warning behavior from shared global command instances.\nFiles Context: `cmd/secrets/lease.go` handles lease raw/json behavior and now owns `--raw` compatibility warning. `cmd/secrets/root.go` owns global backward-compatible output flags and warning emission in `PersistentPreRunE`. `internal/output/output.go` is the envelope contract layer (`ok`/`success`) and central stderr deprecation helper. README migration guidance is in `README.md` under the new v0.4.x -> v0.5.x section."
     }
   ],
   "failures": [

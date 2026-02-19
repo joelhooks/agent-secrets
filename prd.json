@@ -110,11 +110,23 @@
         "cmd/secrets/root.go",
         "internal/output/output.go"
       ]
+    },
+    {
+      "id": "story-mlt0pwra",
+      "title": "Remove MCP references, credit Alex Hillman, clean up README",
+      "description": "Three changes to README.md and skills/secret-management/SKILL.md:\n\n1. **Remove MCP section** from README.md — delete the \"### MCP Server Integration\" section and its \"Coming soon\" text. We're not doing MCP.\n\n2. **Remove MCP section** from skills/secret-management/SKILL.md — delete the \"### MCP Server Integration\" section.\n\n3. **Credit Alex Hillman** in README.md — Add an \"Inspiration\" or \"Credit\" section near the bottom:\n```markdown\n## Inspiration\n\nThis project was inspired by [Alex Hillman's approach](https://x.com/alexhillman/status/2005334574973296911) to agent credential management — the insight that agents shouldn't be anywhere near ALL your passwords. Scoped, time-bounded, audited access with a killswitch.\n```\n\n4. Also update the \"Why?\" section to reference this philosophy more directly — agents need secrets but giving them raw access to your password manager is a terrible idea.",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "README.md",
+        "skills/secret-management/SKILL.md"
+      ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 9,
-    "lastIteration": "2026-02-19T03:04:34.551Z"
+    "totalIterations": 10,
+    "lastIteration": "2026-02-19T05:28:06.198Z"
   }
 }

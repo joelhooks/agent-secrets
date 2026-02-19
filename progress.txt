@@ -304,3 +304,22 @@ TDD sequence done:
 
 Prior failure pattern detected: `verification_rejected`.
 Mitigation: explicitly modified and verified required target files (`cmd/secrets/lease.go`, `cmd/secrets/root.go`, `internal/output/output.go`) and re-ran full validation.
+
+---
+[2026-02-19T05:28:06.199Z]
+Completed: Remove MCP references, credit Alex Hillman, clean up README
+Files: .ralph-context.json, .ralph-iterations.jsonl, README.md, cmd/secrets/lease.go, cmd/secrets/lease_test.go, cmd/secrets/root.go, cmd/secrets/root_test.go, internal/output/output.go, internal/output/output_test.go, prd.json, progress.txt, skills/secret-management/SKILL.md
+Summary: Implemented story `story-mlt0pwra` by updating only the required docs files.
+
+Changes made:
+- `README.md`: updated `## Why?` at `README.md:10` to explicitly state that giving agents raw password-manager access is a bad idea.
+- `README.md`: removed the MCP section (`### MCP Server Integration` and "Coming soon" text) that was previously near `README.md:593`.
+- `README.md`: added `## Inspiration` with Alex Hillman credit/link near the bottom at `README.md:618`.
+- `skills/secret-management/SKILL.md`: removed the `### MCP Server Integration` section at `skills/secret-management/SKILL.md:221`.
+
+Process requirements completed:
+- Ran pre-task memory lookup: `swarm memory find "Remove MCP references, credit Alex Hillman, clean up README"`.
+- Prior failure pattern detected: `verification_rejected`. Mitigation applied: explicitly modified both required target files and verified both appeared in `git status` before validation.
+- Stored learning in hivemind via `swarm memory store ... --tags "ralph,learning,agent-secrets"`.
+- Sent completion event via `openclaw system event --mode now --text "Ralph: completed Remove MCP references, credit Alex Hillman, clean up README"`.
+- Validation passed with: `go build ./cmd/secrets/ && go test ./...`.

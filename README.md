@@ -7,7 +7,7 @@
 
 ## Why?
 
-AI agents need secrets. API keys, tokens, credentials. But giving an agent raw access to your secrets is asking for trouble:
+AI agents need secrets: API keys, tokens, credentials. But giving an agent raw access to your password manager (and therefore all your passwords) is a terrible idea:
 
 - **Exfiltration risk** — compromised agent leaks all credentials
 - **No audit trail** — who accessed what, when?
@@ -590,10 +590,6 @@ secrets revoke $LEASE_ID
 
 ---
 
-### MCP Server Integration
-
-Coming soon — expose as an MCP tool server for direct agent access with automatic lease management.
-
 ## Development
 
 ```bash
@@ -618,6 +614,10 @@ make lint
 - [filippo.io/age](https://github.com/FiloSottile/age) — Modern encryption
 - [github.com/spf13/cobra](https://github.com/spf13/cobra) — CLI framework
 - [github.com/google/uuid](https://github.com/google/uuid) — Lease IDs
+
+## Inspiration
+
+This project was inspired by [Alex Hillman's approach](https://x.com/alexhillman/status/2005334574973296911) to agent credential management — the insight that agents shouldn't be anywhere near ALL your passwords. Scoped, time-bounded, audited access with a killswitch.
 
 ## License
 

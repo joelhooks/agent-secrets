@@ -218,10 +218,6 @@ export VERCEL_TOKEN=$(secrets lease vercel_token --ttl 2h --client-id "$WORKER_I
 # Leases auto-expire after 2 hours
 ```
 
-### MCP Server Integration
-
-Future: Direct MCP tool exposure with automatic lease management. Track issue or PR for implementation status.
-
 ## Security Considerations
 
 ### Encryption
