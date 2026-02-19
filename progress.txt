@@ -323,3 +323,9 @@ Process requirements completed:
 - Stored learning in hivemind via `swarm memory store ... --tags "ralph,learning,agent-secrets"`.
 - Sent completion event via `openclaw system event --mode now --text "Ralph: completed Remove MCP references, credit Alex Hillman, clean up README"`.
 - Validation passed with: `go build ./cmd/secrets/ && go test ./...`.
+
+---
+[2026-02-19T05:43:55.597Z]
+Completed: Test coverage: internal/output envelope and formatters
+Files: README.md, .ralph-context.json, .ralph-iterations.jsonl, internal/output/json.go, internal/output/output_test.go, prd.json
+Summary: Implemented story `story-mlt170vk` by expanding `internal/output` test coverage from 38.5% to 94.3% and fixing one formatter inconsistency. Added envelope/action/deprecation tests in `internal/output/output_test.go`, added JSON formatter tests in `internal/output/json_test.go`, added raw formatter tests in `internal/output/raw_test.go`, and updated `internal/output/json.go` to enforce `success == ok` during JSON formatting.

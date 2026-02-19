@@ -242,6 +242,315 @@ func TestDeprecationWarningPrintsToStderr(t *testing.T) {
 	}
 }
 
+func TestErrorEnvelopeShapeIncludesFixAndNextActions(t *testing.T) {
+	resp := Error("secrets lease", types.ErrSecretNotFound, ActionStatus(), ActionHelp("lease"))
+
+	if resp.OK {
+		t.Fatalf("expected OK=false")
+	}
+	if resp.Success {
+		t.Fatalf("expected Success=false")
+	}
+	if resp.Command != "secrets lease" {
+		t.Fatalf("unexpected command: %q", resp.Command)
+	}
+	if resp.Error == nil {
+		t.Fatalf("expected error detail")
+	}
+	if resp.Error.Message == "" || resp.Error.Code == "" {
+		t.Fatalf("expected structured error fields, got %#v", resp.Error)
+	}
+	if resp.Fix == "" {
+		t.Fatalf("expected fix field")
+	}
+	if len(resp.NextActions) != 2 {
+		t.Fatalf("expected two next actions, got %d", len(resp.NextActions))
+	}
+
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if decoded["fix"] == "" {
+		t.Fatalf("expected fix in serialized response: %s", string(encoded))
+	}
+	if _, ok := decoded["next_actions"]; !ok {
+		t.Fatalf("expected next_actions in serialized response: %s", string(encoded))
+	}
+}
+
+func TestErrorWithFixPopulatesFixField(t *testing.T) {
+	resp := ErrorWithFix("secrets add", types.ErrSecretExists, "Use `secrets update github_token` instead.")
+
+	if resp.Fix != "Use `secrets update github_token` instead." {
+		t.Fatalf("expected explicit fix to be used, got %q", resp.Fix)
+	}
+}
+
+func TestSuccessAndErrorSuccessAliasMirrorsOK(t *testing.T) {
+	successResp := Success("secrets status", map[string]bool{"running": true})
+	if successResp.Success != successResp.OK {
+		t.Fatalf("expected Success to mirror OK for success response")
+	}
+
+	errorResp := ErrorMsg("secrets add", "invalid input")
+	if errorResp.Success != errorResp.OK {
+		t.Fatalf("expected Success to mirror OK for error response")
+	}
+}
+
+func TestSuccessNextActionsSerialization(t *testing.T) {
+	resp := Success(
+		"secrets add",
+		map[string]string{"name": "github_token"},
+		ActionLease("github_token"),
+		ActionStatus(),
+	)
+
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded struct {
+		NextActions []Action `json:"next_actions"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(decoded.NextActions) != 2 {
+		t.Fatalf("expected two serialized next actions, got %d", len(decoded.NextActions))
+	}
+	if decoded.NextActions[0].Command == "" || decoded.NextActions[1].Command == "" {
+		t.Fatalf("expected command strings in next actions: %#v", decoded.NextActions)
+	}
+}
+
+func TestErrorMsgWithCodeUsesMappedCode(t *testing.T) {
+	resp := ErrorMsgWithCode("secrets lease", "timed out", types.ExitTimeout)
+	if resp.Error == nil {
+		t.Fatalf("expected error detail")
+	}
+	if resp.Error.Code != "timeout" {
+		t.Fatalf("expected timeout code, got %q", resp.Error.Code)
+	}
+}
+
+func TestErrorWithCodeHandlesNilError(t *testing.T) {
+	resp := ErrorWithCode("secrets lease", nil, types.ExitGenericError)
+	if resp.Error == nil {
+		t.Fatalf("expected error detail")
+	}
+	if resp.Error.Message != "unknown error" {
+		t.Fatalf("expected unknown error message, got %q", resp.Error.Message)
+	}
+}
+
+func TestErrorInfersDaemonFixFromSentinel(t *testing.T) {
+	resp := Error("secrets status", types.ErrDaemonNotRunning)
+	if resp.Fix != "Start the daemon: secrets serve &" {
+		t.Fatalf("expected daemon fix, got %q", resp.Fix)
+	}
+}
+
+func TestActionBuildersReturnExpectedCommands(t *testing.T) {
+	cases := []struct {
+		name   string
+		action Action
+		cmd    string
+	}{
+		{name: "init", action: ActionInit(), cmd: "secrets init"},
+		{name: "add default", action: ActionAdd(""), cmd: "secrets add <name>"},
+		{name: "add named", action: ActionAdd("github_token"), cmd: "secrets add github_token"},
+		{name: "add rotation", action: ActionAddWithRotation(), cmd: "secrets add <name> --rotate-via '<command>'"},
+		{name: "lease default", action: ActionLease(""), cmd: "secrets lease <name> --json"},
+		{name: "lease named", action: ActionLease("github_token"), cmd: "secrets lease github_token --json"},
+		{name: "lease ttl", action: ActionLeaseWithTTL("github_token", "30m"), cmd: "secrets lease github_token --ttl 30m --json"},
+		{name: "revoke", action: ActionRevoke("lease-123"), cmd: "secrets revoke lease-123"},
+		{name: "revoke all", action: ActionRevokeAll(), cmd: "secrets revoke --all"},
+		{name: "status", action: ActionStatus(), cmd: "secrets status"},
+		{name: "audit", action: ActionAudit(), cmd: "secrets audit"},
+		{name: "audit tail", action: ActionAuditTail(25), cmd: "secrets audit --tail 25"},
+		{name: "update", action: ActionUpdate(), cmd: "secrets self-update"},
+		{name: "help", action: ActionHelp("lease"), cmd: "secrets lease --help"},
+		{name: "scan", action: ActionScan(), cmd: "secrets scan"},
+		{name: "scan path default", action: ActionScanPath(""), cmd: "secrets scan <path>"},
+		{name: "scan path", action: ActionScanPath("./cmd"), cmd: "secrets scan ./cmd"},
+		{name: "import secret", action: ActionImportSecret("github_token", ""), cmd: "secrets add github_token"},
+		{name: "import secret from env", action: ActionImportSecret("github_token", ".env"), cmd: "secrets add github_token --from-env .env"},
+		{name: "env", action: ActionEnv(), cmd: "secrets env"},
+		{name: "env force", action: ActionEnvForce(), cmd: "secrets env --force"},
+		{name: "exec default", action: ActionExec(""), cmd: "secrets exec -- <command>"},
+		{name: "exec cmd", action: ActionExec("npm run deploy"), cmd: "secrets exec -- npm run deploy"},
+		{name: "cleanup", action: ActionCleanup(), cmd: "secrets cleanup"},
+	}
+
+	for _, tc := range cases {
+		if tc.action.Command != tc.cmd {
+			t.Fatalf("%s: expected command %q, got %q", tc.name, tc.cmd, tc.action.Command)
+		}
+	}
+}
+
+func TestActionsAfterAddReturnsContextualActions(t *testing.T) {
+	actions := ActionsAfterAdd("github_token")
+	if len(actions) != 4 {
+		t.Fatalf("expected 4 actions, got %d", len(actions))
+	}
+	if actions[0].Command != "secrets lease github_token --json" {
+		t.Fatalf("unexpected first action: %#v", actions[0])
+	}
+	if actions[1].Command != "secrets lease github_token --ttl 30m --json" {
+		t.Fatalf("unexpected second action: %#v", actions[1])
+	}
+}
+
+func TestActionsAfterLeaseReturnsContextualActions(t *testing.T) {
+	actions := ActionsAfterLease("lease-123", "github_token")
+	if len(actions) != 4 {
+		t.Fatalf("expected 4 actions, got %d", len(actions))
+	}
+	if actions[0].Command != "secrets revoke lease-123" {
+		t.Fatalf("unexpected first action: %#v", actions[0])
+	}
+	if actions[1].Command != "secrets lease github_token --json" {
+		t.Fatalf("unexpected second action: %#v", actions[1])
+	}
+}
+
+func TestActionsWhenEmptyAndNotInitialized(t *testing.T) {
+	empty := ActionsWhenEmpty()
+	if len(empty) != 2 {
+		t.Fatalf("expected 2 empty-state actions, got %d", len(empty))
+	}
+	if empty[0].Command != "secrets add <name>" {
+		t.Fatalf("unexpected empty-state action: %#v", empty[0])
+	}
+
+	notInit := ActionsWhenNotInitialized()
+	if len(notInit) != 1 {
+		t.Fatalf("expected one not-initialized action, got %d", len(notInit))
+	}
+	if notInit[0].Command != "secrets init" {
+		t.Fatalf("unexpected not-initialized action: %#v", notInit[0])
+	}
+}
+
+func TestActionsAfterInitAndForSecrets(t *testing.T) {
+	afterInit := ActionsAfterInit()
+	if len(afterInit) != 3 {
+		t.Fatalf("expected 3 after-init actions, got %d", len(afterInit))
+	}
+
+	forSecrets := ActionsForSecrets([]string{"github_token", "vercel_token"})
+	if len(forSecrets) != 2 {
+		t.Fatalf("expected 2 actions for secrets, got %d", len(forSecrets))
+	}
+	if forSecrets[0].Command != "secrets lease github_token --json" {
+		t.Fatalf("unexpected command: %q", forSecrets[0].Command)
+	}
+	if forSecrets[1].Command != "secrets lease vercel_token --json" {
+		t.Fatalf("unexpected command: %q", forSecrets[1].Command)
+	}
+}
+
+func TestActionsAfterScanAndAfterEnv(t *testing.T) {
+	whenFound := ActionsAfterScan(2)
+	if len(whenFound) != 3 {
+		t.Fatalf("expected 3 actions when scan finds secrets, got %d", len(whenFound))
+	}
+	if whenFound[0].Command != "secrets add " {
+		t.Fatalf("unexpected first scan action command: %q", whenFound[0].Command)
+	}
+
+	whenEmpty := ActionsAfterScan(0)
+	if len(whenEmpty) != 2 {
+		t.Fatalf("expected 2 actions when scan finds none, got %d", len(whenEmpty))
+	}
+	if whenEmpty[0].Command != "secrets scan <path>" {
+		t.Fatalf("unexpected empty scan action: %q", whenEmpty[0].Command)
+	}
+
+	afterEnv := ActionsAfterEnv(".env")
+	if len(afterEnv) != 3 {
+		t.Fatalf("expected 3 after-env actions, got %d", len(afterEnv))
+	}
+	if afterEnv[0].Command != "secrets exec -- <command>" {
+		t.Fatalf("unexpected first env action: %q", afterEnv[0].Command)
+	}
+}
+
+func TestBuildEnvExportEscapesSingleQuotes(t *testing.T) {
+	export := BuildEnvExport("API_TOKEN", "it's-secret")
+	if export != "export API_TOKEN='it'\\''s-secret'" {
+		t.Fatalf("unexpected export: %q", export)
+	}
+}
+
+func TestDeprecationWarningWritesOnlyToStderrAndTrims(t *testing.T) {
+	stdout := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			DeprecationWarning("   WARNING: --raw is deprecated   ")
+		})
+	})
+	if strings.TrimSpace(stdout) != "" {
+		t.Fatalf("expected no stdout output, got %q", stdout)
+	}
+
+	stderr := captureStderr(t, func() {
+		DeprecationWarning("   WARNING: --raw is deprecated   ")
+	})
+	if strings.TrimSpace(stderr) != "WARNING: --raw is deprecated" {
+		t.Fatalf("unexpected deprecation warning format: %q", stderr)
+	}
+
+	blank := captureStderr(t, func() {
+		DeprecationWarning("   ")
+	})
+	if strings.TrimSpace(blank) != "" {
+		t.Fatalf("expected blank warning to produce no output, got %q", blank)
+	}
+}
+
+func TestPrintFallsBackToStderrWhenStdoutWriteFails(t *testing.T) {
+	origStdout := os.Stdout
+	origStderr := os.Stderr
+
+	_, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe failed: %v", err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe failed: %v", err)
+	}
+
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+
+	if err := stdoutWriter.Close(); err != nil {
+		t.Fatalf("failed to close stdout writer: %v", err)
+	}
+
+	Print(Success("secrets status", map[string]bool{"running": true}))
+
+	os.Stdout = origStdout
+	os.Stderr = origStderr
+	_ = stderrWriter.Close()
+
+	errOutput, err := io.ReadAll(stderrReader)
+	if err != nil {
+		t.Fatalf("failed to read stderr: %v", err)
+	}
+	if !strings.Contains(string(errOutput), "Error formatting output:") {
+		t.Fatalf("expected print fallback error, got %q", string(errOutput))
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 

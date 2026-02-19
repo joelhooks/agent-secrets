@@ -122,11 +122,56 @@
         "README.md",
         "skills/secret-management/SKILL.md"
       ]
+    },
+    {
+      "id": "story-mlt170vk",
+      "title": "Test coverage: internal/output envelope and formatters",
+      "description": "Boost test coverage for internal/output from 38.5% to 90%+.\n\nAdd/expand tests in `internal/output/output_test.go`:\n\n1. **Response envelope shape tests:**\n   - Success() returns correct {ok: true, command, result, next_actions} shape\n   - Error() returns correct {ok: false, error: {message, code}, fix, next_actions} shape\n   - ErrorWithFix() populates fix field\n   - Success field mirrors OK field (backwards compat)\n   - Command field is populated\n   - NextActions serialization\n\n2. **JSON formatter tests** (internal/output/json_test.go):\n   - Verify JSON output matches expected envelope\n   - Verify omitempty works (no null fields)\n   - Error responses include fix field\n\n3. **Action builder tests:**\n   - ActionLease, ActionAdd, ActionRevoke etc. return correct command strings\n   - ActionsAfterAdd, ActionsAfterLease return contextual actions\n   - ActionsWhenEmpty, ActionsWhenNotInitialized\n\n4. **Deprecation warning tests:**\n   - DeprecationWarning writes to STDERR not STDOUT\n   - Verify warning message format\n\n5. **Raw formatter tests** (internal/output/raw_test.go if not covered):\n   - Raw format outputs data values only\n   - Handles maps, slices, strings, nil",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/output/output_test.go"
+      ]
+    },
+    {
+      "id": "story-mlt171hg",
+      "title": "Test coverage: daemon handlers (list, update, delete)",
+      "description": "Add tests for the new daemon RPC handlers in `internal/daemon/handlers_test.go`:\n\n1. **List handler tests:**\n   - List with no secrets returns empty array\n   - List with secrets returns names, rotation status, lease counts\n   - List response includes contextual next_actions with lease commands per secret\n\n2. **Update handler tests (if update RPC exists):**\n   - Update existing secret succeeds\n   - Update non-existent secret fails with appropriate error\n   - Update preserves rotation config\n\n3. **Delete handler tests (if delete RPC exists):**\n   - Delete existing secret succeeds\n   - Delete non-existent secret fails\n   - Delete revokes active leases for that secret\n   - Delete response includes appropriate next_actions\n\n4. **Error response tests:**\n   - All handlers return proper error envelope with fix field\n   - Daemon connection errors suggest \"secrets serve &\"",
+      "priority": 2,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/daemon/handlers_test.go"
+      ]
+    },
+    {
+      "id": "story-mlt1721h",
+      "title": "Test coverage: cmd/secrets command tests",
+      "description": "Add tests for cobra command setup and argument validation in `cmd/secrets/root_test.go`:\n\n1. **Root command tests:**\n   - Running with no args outputs JSON command tree (verify ok, result.commands array)\n   - Verify all expected subcommands are registered\n\n2. **Lease command tests:**\n   - Default output is raw (no --json flag)\n   - --json flag produces JSON envelope\n   - --raw flag is accepted (deprecated no-op) \n   - --ttl and --client-id flags are parsed\n\n3. **Add command tests:**\n   - --value flag is parsed\n   - --rotate-via flag is parsed\n\n4. **Delete command tests:**\n   - Requires name argument\n   - --force flag is parsed\n   - Aliases include \"rm\"\n\n5. **Deprecated flag tests:**\n   - --human flag accepted without error\n   - --output flag accepted without error\n   - These are no-ops but shouldn't crash",
+      "priority": 3,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/root_test.go"
+      ]
+    },
+    {
+      "id": "story-mlt172li",
+      "title": "Test coverage: internal/update and internal/types",
+      "description": "Boost coverage for the two lowest-coverage packages:\n\n1. **internal/update/** (14.5% → 70%+):\n   - Add tests in `internal/update/update_test.go`\n   - Test version comparison logic\n   - Test update check with mock HTTP (or skip network tests)\n   - Test background update check doesn't block\n\n2. **internal/types/** (0% → 80%+):\n   - Add `internal/types/types_test.go`\n   - Test ExitCodeFromError mapping\n   - Test UserError creation and field access\n   - Test NewUserError with context\n   - Test error code constants",
+      "priority": 4,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/update/update_test.go",
+        "internal/types"
+      ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 10,
-    "lastIteration": "2026-02-19T05:28:06.198Z"
+    "totalIterations": 11,
+    "lastIteration": "2026-02-19T05:43:55.594Z"
   }
 }

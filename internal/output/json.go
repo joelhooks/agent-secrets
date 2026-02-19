@@ -10,6 +10,7 @@ type JSONFormatter struct{}
 
 // Format implements the Formatter interface for JSON output
 func (f *JSONFormatter) Format(r Response) error {
+	r.Success = r.OK
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(r)
