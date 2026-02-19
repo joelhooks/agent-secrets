@@ -34,10 +34,11 @@ Examples:
   secrets cleanup --watch                        # Run continuously with default interval
   secrets cleanup --watch --interval 5m          # Watch with custom interval`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets cleanup"
 		// Resolve absolute path
 		absPath, err := filepath.Abs(cleanupPath)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to resolve path: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to resolve path: %w", err)))
 			return err
 		}
 
@@ -61,14 +62,16 @@ Examples:
 			// Start blocking watch loop
 			w.Start(ctx)
 
-			output.Print(output.Success("Cleanup watcher stopped", nil))
+			output.Print(output.Success(commandName, map[string]interface{}{
+				"message": "Cleanup watcher stopped",
+			}))
 			return nil
 		}
 
 		// One-time check mode
 		wiped, err := w.Check()
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("cleanup failed: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("cleanup failed: %w", err)))
 			return err
 		}
 
@@ -88,13 +91,13 @@ Examples:
 		var actions []output.Action
 		if len(wiped) > 0 {
 			actions = append(actions, output.Action{
-				Name:        "cleanup_result",
 				Description: fmt.Sprintf("%d file(s) were removed", len(wiped)),
 				Command:     "secrets cleanup --path " + absPath,
 			})
 		}
 
-		output.Print(output.Success(msg, data, actions...))
+		data["message"] = msg
+		output.Print(output.Success(commandName, data, actions...))
 		return nil
 	},
 }

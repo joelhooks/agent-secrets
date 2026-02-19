@@ -13,13 +13,16 @@ type RawFormatter struct{}
 func (f *RawFormatter) Format(r Response) error {
 	// For raw mode, only output the actual data
 	// Ignore success/error markers, actions, and other metadata
-	if r.Data != nil {
-		return printRaw(r.Data)
+	if r.Result != nil {
+		return printRaw(r.Result)
 	}
 
 	// If no data but there's an error, output the error message
-	if !r.Success && r.Error != "" {
-		fmt.Println(r.Error)
+	if !r.OK && r.Error != nil {
+		fmt.Println(r.Error.Message)
+		if r.Fix != "" {
+			fmt.Println(r.Fix)
+		}
 	}
 
 	return nil

@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "projectName": "agent-secrets",
+  "description": "Agent-first CLI refresh for agent-secrets. Align with joelclaw cli-design standard: JSON-only output, HATEOAS next_actions, self-documenting root command, lease defaults to raw value, errors include fix field.",
+  "stories": [
+    {
+      "id": "story-mlsqzwdh",
+      "title": "Refactor response envelope to match cli-design standard",
+      "description": "Refactor the Response struct in internal/output/output.go to match the joelclaw cli-design standard envelope:\n\n**Current:** `{success, message, data, error, exit_code, actions, update}`\n**Target:** `{ok, command, result, error: {message, code}, fix, next_actions}`\n\nChanges needed:\n1. `internal/output/output.go`: Rename `Response` fields:\n   - `Success bool` → `OK bool` (json:\"ok\")\n   - `Data interface{}` → `Result interface{}` (json:\"result,omitempty\")\n   - `Error string` → restructure to `Error *ErrorDetail` (json:\"error,omitempty\") where ErrorDetail has `Message string` + `Code string`\n   - `Actions []Action` → `NextActions []Action` (json:\"next_actions,omitempty\")\n   - Add `Command string` (json:\"command\") — the command that was run\n   - Add `Fix string` (json:\"fix,omitempty\") — plain-language fix suggestion on errors\n   - Remove `Message string` (fold into result or remove)\n   - Remove `ExitCode int` from JSON (keep for process exit only)\n   - Remove `Update *UpdateInfo` from envelope (or fold into result)\n2. Update `Action` struct: remove `Name` field, keep only `Command` and `Description` (matching standard)\n3. Update all helper functions: `Success()`, `Error()`, `ErrorMsg()`, etc. to use new shape\n4. Update `internal/output/json.go` — JSONFormatter stays the same structurally\n5. Update `internal/output/raw.go` — RawFormatter reads from `Result` instead of `Data`\n6. Update `internal/output/table.go` — TableFormatter reads new fields\n7. Update ALL command files in `cmd/secrets/` that call `output.Print()`, `output.Success()`, `output.Error()` etc:\n   - add.go, audit.go, cleanup.go, env.go, exec.go, health.go, init.go, lease.go, revoke.go, scan.go, status.go\n   - Each must pass the `command` string (e.g., \"secrets lease\", \"secrets add\")\n8. Update `internal/types/errors.go` and `internal/types/exitcodes.go` if error codes need mapping to the new `Code string` field\n\nDo NOT change the lease default behavior yet (that's a separate story). Do NOT remove output format flags yet (separate story). Just refactor the envelope shape.",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/output/output.go",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/add.go"
+      ]
+    },
+    {
+      "id": "story-mlsr055z",
+      "title": "Make lease default to raw value output",
+      "description": "Change `secrets lease` to output ONLY the secret value by default (no JSON envelope). This is the #1 agent UX issue — agents always forget `--raw` and expect to get the value directly.\n\nChanges:\n1. `cmd/secrets/lease.go`:\n   - Flip the default: raw output is now default behavior\n   - Remove `--raw` flag (it's now the default)\n   - Add `--json` flag to opt INTO the full JSON envelope when needed\n   - When default (no --json): `fmt.Print(result.Value)` — just the value, no newline, perfect for `$(secrets lease name)`\n   - When `--json`: output the full HATEOAS JSON envelope with ok/command/result/next_actions\n2. Update the help text / Long description to reflect this change\n3. Update `internal/output/output.go` action helpers that reference `--raw` (like `ActionLease`) — remove `--raw` references, add `--json` where relevant\n\nThe goal: `export TOKEN=$(secrets lease github_token)` just works without any flags.",
+      "priority": 2,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/lease.go"
+      ]
+    },
+    {
+      "id": "story-mlsr0ekt",
+      "title": "Remove TTY detection and legacy output format flags — JSON always",
+      "description": "Per cli-design standard: JSON is the only output format. No --human, no --output, no TTY auto-detection.\n\nChanges:\n1. `cmd/secrets/root.go`:\n   - Remove `--human` flag\n   - Remove `--output` flag\n   - Remove `output.HumanMode` and `output.OutputFormat` references\n2. `internal/output/formatter.go`:\n   - Remove TTY detection (`isTerminal`)\n   - `GetFormatter()` always returns `JSONFormatter`\n   - Remove `ValidateMode()` (no longer needed)\n   - Remove `OutputMode` type and constants (ModeJSON, ModeTable, ModeRaw)\n3. `internal/output/table.go` — delete this file entirely (no table output)\n4. `internal/output/raw.go` — keep for internal use by lease command but remove from formatter system\n5. `internal/output/output.go`:\n   - Remove `HumanMode` and `OutputFormat` global vars\n   - Simplify `Print()` to always use JSON\n   - Remove `printHuman()` and `printData()` functions\n6. `internal/output/formatter_test.go` — update tests if they exist\n\nThe Print() function should just JSON-encode to stdout. Simple.",
+      "priority": 3,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/output/formatter.go",
+        "cmd/secrets/root.go"
+      ]
+    },
+    {
+      "id": "story-mlsr0q1z",
+      "title": "Self-documenting root command with command tree",
+      "description": "Per cli-design standard: running `secrets` with no args should return a JSON command tree so agents can discover everything in one call.\n\nChanges to `cmd/secrets/root.go`:\n1. Add a `Run` function to `rootCmd` that outputs the command tree as JSON\n2. The output should follow the standard envelope:\n```json\n{\n  \"ok\": true,\n  \"command\": \"secrets\",\n  \"result\": {\n    \"description\": \"Portable credential management for AI agents\",\n    \"version\": \"<version>\",\n    \"commands\": [\n      {\"name\": \"init\", \"description\": \"Initialize the secrets store\", \"usage\": \"secrets init\"},\n      {\"name\": \"add\", \"description\": \"Add a secret to the store\", \"usage\": \"secrets add <name> [--value <val>] [--rotate-via <cmd>]\"},\n      {\"name\": \"lease\", \"description\": \"Get a secret value (raw by default)\", \"usage\": \"secrets lease <name> [--ttl 1h] [--client-id agent-x] [--json]\"},\n      {\"name\": \"revoke\", \"description\": \"Revoke a lease or killswitch\", \"usage\": \"secrets revoke <lease-id> | --all\"},\n      {\"name\": \"status\", \"description\": \"Daemon status and active leases\", \"usage\": \"secrets status\"},\n      {\"name\": \"health\", \"description\": \"Health check\", \"usage\": \"secrets health\"},\n      {\"name\": \"audit\", \"description\": \"View audit log\", \"usage\": \"secrets audit [--tail N]\"},\n      {\"name\": \"scan\", \"description\": \"Scan for hardcoded secrets\", \"usage\": \"secrets scan [path]\"},\n      {\"name\": \"env\", \"description\": \"Generate .env from .secrets.json\", \"usage\": \"secrets env [--force]\"},\n      {\"name\": \"exec\", \"description\": \"Run command with secrets as env vars\", \"usage\": \"secrets exec -- <command>\"},\n      {\"name\": \"cleanup\", \"description\": \"Remove expired lease files\", \"usage\": \"secrets cleanup\"},\n      {\"name\": \"serve\", \"description\": \"Start the daemon\", \"usage\": \"secrets serve\"},\n      {\"name\": \"update\", \"description\": \"Update to latest version\", \"usage\": \"secrets update\"}\n    ]\n  },\n  \"next_actions\": [\n    {\"command\": \"secrets status\", \"description\": \"Check daemon status\"},\n    {\"command\": \"secrets health\", \"description\": \"Full health check\"},\n    {\"command\": \"secrets lease <name>\", \"description\": \"Get a secret value\"}\n  ]\n}\n```\n3. This replaces cobra's default help output when no subcommand is given\n4. Keep `--help` working for detailed cobra help if someone wants it",
+      "priority": 4,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/root.go"
+      ]
+    },
+    {
+      "id": "story-mlsr0zv6",
+      "title": "Add fix field to all error responses",
+      "description": "Per cli-design standard: every error response must include a `fix` field with plain-language remediation.\n\nReview ALL commands in cmd/secrets/ and ensure every error path includes actionable fix text:\n\n1. **Daemon not running errors** (most commands): fix = \"Start the daemon: secrets serve &\"\n2. **Secret not found** (lease): fix = \"Check available secrets: secrets status\"\n3. **Secret already exists** (add): fix = \"Use a different name, or update the existing secret\"\n4. **Lease not found** (revoke): fix = \"Check active leases: secrets status\"\n5. **Empty value** (add): fix = \"Provide a value via --value, stdin pipe, or interactive prompt\"\n6. **Store not initialized** (any): fix = \"Initialize the store: secrets init\"\n7. **Permission errors**: fix = \"Check file permissions on ~/.agent-secrets/ or use --skip-permission-check\"\n8. **Socket timeout**: fix = \"Daemon may be overloaded. Check: secrets health\"\n\nUpdate the output.Error() and output.ErrorMsg() helpers to accept an optional fix string, or add a new ErrorWithFix() helper. Make sure the `fix` field appears in the JSON envelope.\n\nAlso update `internal/types/errors.go` UserError type to map to the new error envelope structure (it already has Suggestion field — make sure that becomes `fix` in the JSON output).",
+      "priority": 5,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "internal/output/output.go",
+        "cmd/secrets/lease.go"
+      ]
+    },
+    {
+      "id": "story-mlsr197b",
+      "title": "Add list command to show all stored secret names",
+      "description": "Agents need to know what secrets are available. Currently there's no `secrets list` command — you have to infer from `secrets status` which only shows a count.\n\nAdd a new `cmd/secrets/list.go`:\n1. New `listCmd` cobra command: `secrets list`\n2. Calls daemon RPC to get list of secret names (may need new daemon method, or use existing status method if it returns names)\n3. Returns JSON envelope:\n```json\n{\n  \"ok\": true,\n  \"command\": \"secrets list\",\n  \"result\": {\n    \"secrets\": [\n      {\"name\": \"github_token\", \"has_rotation\": true, \"active_leases\": 1},\n      {\"name\": \"anthropic_key\", \"has_rotation\": false, \"active_leases\": 0}\n    ],\n    \"count\": 2\n  },\n  \"next_actions\": [\n    {\"command\": \"secrets lease github_token\", \"description\": \"Lease github_token\"},\n    {\"command\": \"secrets lease anthropic_key\", \"description\": \"Lease anthropic_key\"},\n    {\"command\": \"secrets add <name>\", \"description\": \"Add a new secret\"}\n  ]\n}\n```\n4. The `next_actions` should include a lease command for EACH secret — this is the HATEOAS magic, agents can discover and use secrets in one flow\n5. Register in `cmd/secrets/root.go`\n6. If the daemon doesn't support listing secret names, add a new RPC method `secrets.list` in `internal/daemon/handlers.go` and `internal/daemon/protocol.go`\n\nThis is critical for agent discoverability.",
+      "priority": 6,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/list.go"
+      ]
+    },
+    {
+      "id": "story-mlsr1icp",
+      "title": "Update README, SKILL.md, and AGENTS.md for new CLI design",
+      "description": "Update all documentation to reflect the new agent-first CLI design:\n\n1. **README.md** — Rewrite quick start and examples:\n   - Show `secrets lease name` returns raw value by default\n   - Show `export TOKEN=$(secrets lease github_token)` as the primary pattern\n   - Show JSON envelope examples with `--json`\n   - Show `secrets` (root) returns command tree\n   - Remove references to `--raw`, `--human`, `--output` flags\n   - Add `secrets list` to command reference\n\n2. **skills/secret-management/SKILL.md** — Update the agent skill doc:\n   - Emphasize: `secrets lease name` → raw value, no flags needed\n   - Show `secrets list` for discovery\n   - Show `secrets` root for command tree\n   - Update all examples\n   - Remove `--raw` references\n\n3. **AGENTS.md** — Update any agent-specific notes about output format",
+      "priority": 7,
+      "passes": false,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "README.md",
+        "skills/secret-management/SKILL.md"
+      ]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-19T00:53:39.274Z",
+    "totalIterations": 1,
+    "lastIteration": "2026-02-19T01:03:26.430Z"
+  }
+}

@@ -16,6 +16,7 @@ var statusCmd = &cobra.Command{
 	Short: "Show daemon status",
 	Long:  `Display the current status of the agent-secrets daemon, including uptime, secret count, and active leases.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets status"
 		resp, err := rpcCall(socketPath, daemon.MethodStatus, daemon.StatusParams{})
 		if err != nil {
 			// Check if this is a daemon connection error
@@ -26,21 +27,21 @@ var statusCmd = &cobra.Command{
 					"To start it:\n  secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(userErr))
+				output.Print(output.Error(commandName, userErr))
 				return userErr
 			}
-			output.Print(output.Error(fmt.Errorf("failed to get status: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to get status: %w", err)))
 			return fmt.Errorf("failed to get status: %w", err)
 		}
 
 		var result types.DaemonStatus
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return fmt.Errorf("failed to parse result: %w", err)
 		}
 
@@ -84,7 +85,7 @@ var statusCmd = &cobra.Command{
 		}
 
 		output.Print(output.Success(
-			"Daemon status retrieved",
+			commandName,
 			statusData,
 			actions...,
 		))

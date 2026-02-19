@@ -31,10 +31,11 @@ Examples:
   secrets scan --exclude node_modules,.git        # Exclude patterns
   secrets scan --no-recursive                     # Disable recursive scanning`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets scan"
 		// Resolve absolute path
 		absPath, err := filepath.Abs(scanPath)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to resolve path: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to resolve path: %w", err)))
 			return err
 		}
 
@@ -45,7 +46,7 @@ Examples:
 		// Run scan
 		result, err := s.Scan(absPath)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("scan failed: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("scan failed: %w", err)))
 			return err
 		}
 
@@ -77,9 +78,10 @@ Examples:
 		if len(result.Findings) > 0 {
 			msg = fmt.Sprintf("Found %d exposed secrets in %d files", len(result.Findings), result.ScannedFiles)
 		}
+		data["message"] = msg
 
 		output.Print(output.Success(
-			msg,
+			commandName,
 			data,
 			output.ActionsAfterScan(len(result.Findings))...,
 		))

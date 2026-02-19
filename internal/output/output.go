@@ -5,6 +5,7 @@ package output
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,26 +13,30 @@ import (
 	"github.com/joelhooks/agent-secrets/internal/types"
 )
 
-// Action represents a possible next action (HATEOAS-style)
+// Action represents a possible next action (HATEOAS-style).
 type Action struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
 	Command     string `json:"command"`
-	Dangerous   bool   `json:"dangerous,omitempty"`
+	Description string `json:"description"`
 }
 
-// Response is the standard CLI response format
+// ErrorDetail contains structured error metadata.
+type ErrorDetail struct {
+	Message string `json:"message"`
+	Code    string `json:"code"`
+}
+
+// Response is the standard CLI response format.
 type Response struct {
-	Success  bool        `json:"success"`
-	Message  string      `json:"message,omitempty"`
-	Data     interface{} `json:"data,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	ExitCode int         `json:"exit_code,omitempty"`
-	Actions  []Action    `json:"actions,omitempty"`
-	Update   *UpdateInfo `json:"update,omitempty"`
+	OK          bool         `json:"ok"`
+	Command     string       `json:"command"`
+	Result      interface{}  `json:"result,omitempty"`
+	Error       *ErrorDetail `json:"error,omitempty"`
+	Fix         string       `json:"fix,omitempty"`
+	NextActions []Action     `json:"next_actions,omitempty"`
+	ExitCode    int          `json:"-"`
 }
 
-// UpdateInfo contains version update information
+// UpdateInfo contains version update information for update checks.
 type UpdateInfo struct {
 	Available      bool   `json:"available"`
 	CurrentVersion string `json:"current_version"`
@@ -39,89 +44,110 @@ type UpdateInfo struct {
 	Command        string `json:"command,omitempty"`
 }
 
-// Global flags for output modes
+// Global flags for output modes.
 var (
 	HumanMode    bool   // Deprecated: use OutputFormat instead
 	OutputFormat string // json, table, or raw
 )
 
-// Version info (set by ldflags)
+// Version info (set by ldflags).
 var (
 	Version   = "dev"
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )
 
-// Print outputs the response using the configured formatter
+// Print outputs the response using the configured formatter.
 func Print(r Response) {
-	// Handle legacy HumanMode flag for backwards compatibility
+	// Handle legacy HumanMode flag for backwards compatibility.
 	var mode OutputMode
 	if HumanMode {
 		mode = ModeTable
 	} else if OutputFormat != "" {
 		mode = OutputMode(OutputFormat)
 	}
-	// If neither flag is set, GetFormatter will auto-detect
+	// If neither flag is set, GetFormatter will auto-detect.
 
 	formatter := GetFormatter(mode)
 	if err := formatter.Format(r); err != nil {
-		// Fallback to simple error print if formatting fails
+		// Fallback to simple error print if formatting fails.
 		fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-		printJSON(r)
+		_ = printJSON(r)
 	}
 }
 
-// Success creates a successful response
-func Success(message string, data interface{}, actions ...Action) Response {
+// Success creates a successful response.
+func Success(command string, result interface{}, actions ...Action) Response {
 	return Response{
-		Success: true,
-		Message: message,
-		Data:    data,
-		Actions: actions,
+		OK:          true,
+		Command:     command,
+		Result:      result,
+		NextActions: actions,
+		ExitCode:    types.ExitSuccess,
 	}
 }
 
-// Error creates an error response with appropriate exit code
-func Error(err error, actions ...Action) Response {
+// Error creates an error response with appropriate exit code.
+func Error(command string, err error, actions ...Action) Response {
+	exitCode := types.ExitCodeFromError(err)
+	errorDetail, fix := buildErrorDetail(err, exitCode)
+
 	return Response{
-		Success:  false,
-		Error:    err.Error(),
-		ExitCode: types.ExitCodeFromError(err),
-		Actions:  actions,
+		OK:          false,
+		Command:     command,
+		Error:       errorDetail,
+		Fix:         fix,
+		NextActions: actions,
+		ExitCode:    exitCode,
 	}
 }
 
-// ErrorMsg creates an error response from a string
-func ErrorMsg(msg string, actions ...Action) Response {
+// ErrorMsg creates an error response from a string.
+func ErrorMsg(command, msg string, actions ...Action) Response {
+	exitCode := types.ExitGenericError
 	return Response{
-		Success:  false,
-		Error:    msg,
-		ExitCode: types.ExitGenericError,
-		Actions:  actions,
+		OK:      false,
+		Command: command,
+		Error: &ErrorDetail{
+			Message: msg,
+			Code:    types.ErrorCodeFromExitCode(exitCode),
+		},
+		Fix:         defaultFix,
+		NextActions: actions,
+		ExitCode:    exitCode,
 	}
 }
 
-// ErrorWithCode creates an error response with a specific exit code
-func ErrorWithCode(err error, exitCode int, actions ...Action) Response {
+// ErrorWithCode creates an error response with a specific exit code.
+func ErrorWithCode(command string, err error, exitCode int, actions ...Action) Response {
+	errorDetail, fix := buildErrorDetail(err, exitCode)
+
 	return Response{
-		Success:  false,
-		Error:    err.Error(),
-		ExitCode: exitCode,
-		Actions:  actions,
+		OK:          false,
+		Command:     command,
+		Error:       errorDetail,
+		Fix:         fix,
+		NextActions: actions,
+		ExitCode:    exitCode,
 	}
 }
 
-// ErrorMsgWithCode creates an error response from a string with specific exit code
-func ErrorMsgWithCode(msg string, exitCode int, actions ...Action) Response {
+// ErrorMsgWithCode creates an error response from a string with specific exit code.
+func ErrorMsgWithCode(command, msg string, exitCode int, actions ...Action) Response {
 	return Response{
-		Success:  false,
-		Error:    msg,
-		ExitCode: exitCode,
-		Actions:  actions,
+		OK:      false,
+		Command: command,
+		Error: &ErrorDetail{
+			Message: msg,
+			Code:    types.ErrorCodeFromExitCode(exitCode),
+		},
+		Fix:         defaultFix,
+		NextActions: actions,
+		ExitCode:    exitCode,
 	}
 }
 
-// Fatal prints an error response and exits with the appropriate exit code
+// Fatal prints an error response and exits with the appropriate exit code.
 func Fatal(r Response) {
 	Print(r)
 	if r.ExitCode != 0 {
@@ -130,14 +156,14 @@ func Fatal(r Response) {
 	os.Exit(types.ExitGenericError)
 }
 
-// FatalError prints an error and exits with the appropriate exit code
-func FatalError(err error, actions ...Action) {
-	Fatal(Error(err, actions...))
+// FatalError prints an error and exits with the appropriate exit code.
+func FatalError(command string, err error, actions ...Action) {
+	Fatal(Error(command, err, actions...))
 }
 
-// FatalMsg prints an error message and exits with generic error code
-func FatalMsg(msg string, actions ...Action) {
-	Fatal(ErrorMsg(msg, actions...))
+// FatalMsg prints an error message and exits with generic error code.
+func FatalMsg(command, msg string, actions ...Action) {
+	Fatal(ErrorMsg(command, msg, actions...))
 }
 
 func printJSON(r Response) error {
@@ -147,32 +173,22 @@ func printJSON(r Response) error {
 }
 
 func printHuman(r Response) {
-	if r.Success {
-		if r.Message != "" {
-			fmt.Printf("✓ %s\n", r.Message)
+	if r.OK {
+		if r.Result != nil {
+			printData(r.Result)
 		}
-		if r.Data != nil {
-			printData(r.Data)
+	} else if r.Error != nil {
+		fmt.Printf("✗ Error: %s\n", r.Error.Message)
+		if r.Fix != "" {
+			fmt.Printf("  Fix: %s\n", r.Fix)
 		}
-	} else {
-		fmt.Printf("✗ Error: %s\n", r.Error)
 	}
 
-	// Print update warning
-	if r.Update != nil && r.Update.Available {
-		fmt.Printf("\n⚠ Update available: %s → %s\n", r.Update.CurrentVersion, r.Update.LatestVersion)
-		fmt.Printf("  Run: %s\n", r.Update.Command)
-	}
-
-	// Print available actions
-	if len(r.Actions) > 0 {
+	// Print available actions.
+	if len(r.NextActions) > 0 {
 		fmt.Println("\nNext steps:")
-		for _, a := range r.Actions {
-			prefix := "→"
-			if a.Dangerous {
-				prefix = "⚠"
-			}
-			fmt.Printf("  %s %s\n", prefix, a.Description)
+		for _, a := range r.NextActions {
+			fmt.Printf("  → %s\n", a.Description)
 			fmt.Printf("    $ %s\n", a.Command)
 		}
 	}
@@ -187,16 +203,44 @@ func printData(data interface{}) {
 			fmt.Printf("  %s: %v\n", key, val)
 		}
 	default:
-		// Fall back to JSON for complex types
+		// Fall back to JSON for complex types.
 		b, _ := json.MarshalIndent(data, "  ", "  ")
 		fmt.Println(string(b))
 	}
 }
 
-// Common action builders
+const defaultFix = "Review the error details and run `secrets --help` for usage."
+
+func buildErrorDetail(err error, exitCode int) (*ErrorDetail, string) {
+	if err == nil {
+		return &ErrorDetail{
+			Message: "unknown error",
+			Code:    types.ErrorCodeFromExitCode(exitCode),
+		}, defaultFix
+	}
+
+	message := strings.TrimSpace(err.Error())
+	fix := defaultFix
+
+	var userErr *types.UserError
+	if errors.As(err, &userErr) {
+		if userErr.What != "" {
+			message = userErr.What
+		}
+		if userErr.Suggestion != "" {
+			fix = strings.TrimSpace(userErr.Suggestion)
+		}
+	}
+
+	return &ErrorDetail{
+		Message: message,
+		Code:    types.ErrorCodeFromExitCode(exitCode),
+	}, fix
+}
+
+// Common action builders.
 func ActionInit() Action {
 	return Action{
-		Name:        "init",
 		Description: "Initialize the secrets store",
 		Command:     "secrets init",
 	}
@@ -208,7 +252,6 @@ func ActionAdd(name string) Action {
 		cmd = fmt.Sprintf("secrets add %s", name)
 	}
 	return Action{
-		Name:        "add",
 		Description: "Add a new secret",
 		Command:     cmd,
 	}
@@ -216,7 +259,6 @@ func ActionAdd(name string) Action {
 
 func ActionAddWithRotation() Action {
 	return Action{
-		Name:        "add_with_rotation",
 		Description: "Add a secret with auto-rotation",
 		Command:     "secrets add <name> --rotate-via '<command>'",
 	}
@@ -228,7 +270,6 @@ func ActionLease(name string) Action {
 		cmd = fmt.Sprintf("secrets lease %s", name)
 	}
 	return Action{
-		Name:        "lease",
 		Description: "Get a time-bounded lease for a secret",
 		Command:     cmd,
 	}
@@ -236,7 +277,6 @@ func ActionLease(name string) Action {
 
 func ActionLeaseWithTTL(name, ttl string) Action {
 	return Action{
-		Name:        "lease_ttl",
 		Description: fmt.Sprintf("Lease %s with custom TTL", name),
 		Command:     fmt.Sprintf("secrets lease %s --ttl %s", name, ttl),
 	}
@@ -244,7 +284,6 @@ func ActionLeaseWithTTL(name, ttl string) Action {
 
 func ActionRevoke(leaseID string) Action {
 	return Action{
-		Name:        "revoke",
 		Description: "Revoke a specific lease",
 		Command:     fmt.Sprintf("secrets revoke %s", leaseID),
 	}
@@ -252,16 +291,13 @@ func ActionRevoke(leaseID string) Action {
 
 func ActionRevokeAll() Action {
 	return Action{
-		Name:        "revoke_all",
 		Description: "KILLSWITCH: Revoke all active leases",
 		Command:     "secrets revoke --all",
-		Dangerous:   true,
 	}
 }
 
 func ActionStatus() Action {
 	return Action{
-		Name:        "status",
 		Description: "Check daemon status and active leases",
 		Command:     "secrets status",
 	}
@@ -269,7 +305,6 @@ func ActionStatus() Action {
 
 func ActionAudit() Action {
 	return Action{
-		Name:        "audit",
 		Description: "View the audit log",
 		Command:     "secrets audit",
 	}
@@ -277,7 +312,6 @@ func ActionAudit() Action {
 
 func ActionAuditTail(n int) Action {
 	return Action{
-		Name:        "audit_tail",
 		Description: fmt.Sprintf("View last %d audit entries", n),
 		Command:     fmt.Sprintf("secrets audit --tail %d", n),
 	}
@@ -285,7 +319,6 @@ func ActionAuditTail(n int) Action {
 
 func ActionUpdate() Action {
 	return Action{
-		Name:        "update",
 		Description: "Update to the latest version",
 		Command:     "secrets update",
 	}
@@ -293,13 +326,12 @@ func ActionUpdate() Action {
 
 func ActionHelp(cmd string) Action {
 	return Action{
-		Name:        "help",
 		Description: fmt.Sprintf("Get help for %s", cmd),
 		Command:     fmt.Sprintf("secrets %s --help", cmd),
 	}
 }
 
-// SecretsList returns actions for available secrets
+// SecretsList returns actions for available secrets.
 func ActionsForSecrets(names []string) []Action {
 	actions := make([]Action, 0, len(names))
 	for _, name := range names {
@@ -308,7 +340,7 @@ func ActionsForSecrets(names []string) []Action {
 	return actions
 }
 
-// ActionsAfterInit returns suggested actions after initialization
+// ActionsAfterInit returns suggested actions after initialization.
 func ActionsAfterInit() []Action {
 	return []Action{
 		ActionAdd(""),
@@ -317,7 +349,7 @@ func ActionsAfterInit() []Action {
 	}
 }
 
-// ActionsAfterAdd returns suggested actions after adding a secret
+// ActionsAfterAdd returns suggested actions after adding a secret.
 func ActionsAfterAdd(name string) []Action {
 	return []Action{
 		ActionLease(name),
@@ -327,7 +359,7 @@ func ActionsAfterAdd(name string) []Action {
 	}
 }
 
-// ActionsAfterLease returns suggested actions after getting a lease
+// ActionsAfterLease returns suggested actions after getting a lease.
 func ActionsAfterLease(leaseID, secretName string) []Action {
 	return []Action{
 		ActionRevoke(leaseID),
@@ -337,7 +369,7 @@ func ActionsAfterLease(leaseID, secretName string) []Action {
 	}
 }
 
-// ActionsWhenEmpty returns actions when no secrets exist
+// ActionsWhenEmpty returns actions when no secrets exist.
 func ActionsWhenEmpty() []Action {
 	return []Action{
 		ActionAdd(""),
@@ -345,43 +377,41 @@ func ActionsWhenEmpty() []Action {
 	}
 }
 
-// ActionsWhenNotInitialized returns actions when store isn't initialized
+// ActionsWhenNotInitialized returns actions when store isn't initialized.
 func ActionsWhenNotInitialized() []Action {
 	return []Action{
 		ActionInit(),
 	}
 }
 
-// BuildEnvExport formats a lease for shell export
+// BuildEnvExport formats a lease for shell export.
 func BuildEnvExport(varName, value string) string {
-	// Escape single quotes in value
+	// Escape single quotes in value.
 	escaped := strings.ReplaceAll(value, "'", "'\\''")
 	return fmt.Sprintf("export %s='%s'", varName, escaped)
 }
 
-// ActionScan suggests running a scan to find hardcoded secrets
+// ActionScan suggests running a scan to find hardcoded secrets.
 func ActionScan() Action {
 	return Action{
-		Name:        "scan",
 		Description: "Scan for hardcoded secrets in your repository",
 		Command:     "secrets scan",
 	}
 }
 
-// ActionScanPath suggests scanning a specific path
+// ActionScanPath suggests scanning a specific path.
 func ActionScanPath(path string) Action {
 	cmd := "secrets scan <path>"
 	if path != "" {
 		cmd = fmt.Sprintf("secrets scan %s", path)
 	}
 	return Action{
-		Name:        "scan_path",
 		Description: fmt.Sprintf("Scan %s for hardcoded secrets", path),
 		Command:     cmd,
 	}
 }
 
-// ActionImportSecret suggests importing a found secret to the secrets store
+// ActionImportSecret suggests importing a found secret to the secrets store.
 func ActionImportSecret(name, envFile string) Action {
 	var cmd string
 	if envFile != "" {
@@ -396,13 +426,12 @@ func ActionImportSecret(name, envFile string) Action {
 	}
 
 	return Action{
-		Name:        "import_secret",
 		Description: desc,
 		Command:     cmd,
 	}
 }
 
-// ActionsAfterScan returns contextual actions after scan completes
+// ActionsAfterScan returns contextual actions after scan completes.
 func ActionsAfterScan(count int) []Action {
 	if count == 0 {
 		return []Action{
@@ -411,7 +440,7 @@ func ActionsAfterScan(count int) []Action {
 		}
 	}
 
-	// When secrets are found, suggest import and rotation
+	// When secrets are found, suggest import and rotation.
 	return []Action{
 		ActionImportSecret("", ""),
 		ActionAddWithRotation(),
@@ -419,48 +448,43 @@ func ActionsAfterScan(count int) []Action {
 	}
 }
 
-// ActionEnv suggests generating .env file from secrets
+// ActionEnv suggests generating .env file from secrets.
 func ActionEnv() Action {
 	return Action{
-		Name:        "env",
 		Description: "Generate .env file from .secrets.json config",
 		Command:     "secrets env",
 	}
 }
 
-// ActionEnvForce suggests force-overwriting existing .env file
+// ActionEnvForce suggests force-overwriting existing .env file.
 func ActionEnvForce() Action {
 	return Action{
-		Name:        "env_force",
 		Description: "Force overwrite existing .env file",
 		Command:     "secrets env --force",
-		Dangerous:   true,
 	}
 }
 
-// ActionExec suggests running a command with secrets loaded
+// ActionExec suggests running a command with secrets loaded.
 func ActionExec(cmd string) Action {
 	command := "secrets exec -- <command>"
 	if cmd != "" {
 		command = fmt.Sprintf("secrets exec -- %s", cmd)
 	}
 	return Action{
-		Name:        "exec",
 		Description: "Run command with secrets as environment variables",
 		Command:     command,
 	}
 }
 
-// ActionCleanup suggests removing expired lease env files
+// ActionCleanup suggests removing expired lease env files.
 func ActionCleanup() Action {
 	return Action{
-		Name:        "cleanup",
 		Description: "Remove expired lease environment files",
 		Command:     "secrets cleanup",
 	}
 }
 
-// ActionsAfterEnv returns suggested actions after env file generation
+// ActionsAfterEnv returns suggested actions after env file generation.
 func ActionsAfterEnv(envFile string) []Action {
 	return []Action{
 		ActionExec(""),

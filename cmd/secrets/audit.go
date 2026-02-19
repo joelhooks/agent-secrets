@@ -19,29 +19,33 @@ Use --tail to limit the number of entries shown.
 
 The response includes suggested filtering actions to help narrow down results.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets audit"
 		params := daemon.AuditParams{
 			Tail: auditTail,
 		}
 
 		resp, err := rpcCall(socketPath, daemon.MethodAudit, params)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to fetch audit log: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to fetch audit log: %w", err)))
 			return nil
 		}
 
 		var result daemon.AuditResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return nil
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return nil
 		}
 
 		if len(result.Entries) == 0 {
-			output.Print(output.Success("No audit entries found", nil))
+			output.Print(output.Success(commandName, map[string]interface{}{
+				"message": "No audit entries found",
+				"entries": []map[string]interface{}{},
+			}))
 			return nil
 		}
 
@@ -59,9 +63,9 @@ The response includes suggested filtering actions to help narrow down results.`,
 		}
 
 		auditData := map[string]interface{}{
-			"entries":       entries,
-			"total_shown":   len(entries),
-			"tail_limit":    auditTail,
+			"entries":     entries,
+			"total_shown": len(entries),
+			"tail_limit":  auditTail,
 		}
 
 		// Suggest filtering actions
@@ -69,14 +73,13 @@ The response includes suggested filtering actions to help narrow down results.`,
 			output.ActionAuditTail(10),
 			output.ActionAuditTail(100),
 			{
-				Name:        "audit_all",
 				Description: "Show all audit entries",
 				Command:     "secrets audit --tail 0",
 			},
 			output.ActionStatus(),
 		}
 
-		output.Print(output.Success("Audit log retrieved", auditData, actions...))
+		output.Print(output.Success(commandName, auditData, actions...))
 		return nil
 	},
 }

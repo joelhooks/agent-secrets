@@ -36,17 +36,18 @@ Examples:
   secrets env --ttl 2h                  # Override TTL to 2 hours
   secrets env --dry-run                 # Preview without writing`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets env"
 		// Find project configuration
 		cfg, projectDir, err := project.FindProjectConfig()
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to find project config: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
 			return err
 		}
 
 		// Determine TTL (flag overrides config)
 		ttl, err := parseTTL(cfg, envTTL)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("invalid TTL: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("invalid TTL: %w", err)))
 			return err
 		}
 
@@ -57,14 +58,13 @@ Examples:
 		if !envForce && !envDryRun {
 			if _, err := os.Stat(envFilePath); err == nil {
 				output.Print(output.ErrorMsg(
+					commandName,
 					fmt.Sprintf("env file already exists: %s (use --force to overwrite)", envFilePath),
 					output.Action{
-						Name:        "force_sync",
 						Description: "Overwrite existing env file",
 						Command:     "secrets env --force",
 					},
 					output.Action{
-						Name:        "check_expiry",
 						Description: "Check if env file is expired",
 						Command:     fmt.Sprintf("cat %s | grep 'secrets-ttl'", envFilePath),
 					},
@@ -76,14 +76,14 @@ Examples:
 		// Get adapter based on source
 		adapter, err := getAdapter(cfg.Source)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to get adapter: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to get adapter: %w", err)))
 			return err
 		}
 
 		// Pull secrets from source
 		secrets, err := adapter.Pull(cfg.Project, cfg.Scope)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to pull secrets: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
 			return err
 		}
 
@@ -96,7 +96,7 @@ Examples:
 				}
 			}
 			if len(missingVars) > 0 {
-				output.Print(output.Error(fmt.Errorf("missing required vars: %v", missingVars)))
+				output.Print(output.Error(commandName, fmt.Errorf("missing required vars: %v", missingVars)))
 				return fmt.Errorf("required vars missing")
 			}
 		}
@@ -115,10 +115,9 @@ Examples:
 			}
 
 			output.Print(output.Success(
-				fmt.Sprintf("Would sync %d vars from %s (dry-run)", len(secrets), cfg.Source),
+				commandName,
 				data,
 				output.Action{
-					Name:        "sync",
 					Description: "Run sync without --dry-run",
 					Command:     "secrets env",
 				},
@@ -128,7 +127,7 @@ Examples:
 
 		// Write to env file with TTL
 		if err := envfile.WriteWithTTL(envFilePath, secrets, ttl, cfg.Source); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to write env file: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to write env file: %w", err)))
 			return err
 		}
 
@@ -145,15 +144,13 @@ Examples:
 		}
 
 		output.Print(output.Success(
-			fmt.Sprintf("Synced %d environment variables to %s", len(secrets), envFilePath),
+			commandName,
 			data,
 			output.Action{
-				Name:        "verify",
 				Description: "Verify env file contents",
 				Command:     fmt.Sprintf("cat %s", envFilePath),
 			},
 			output.Action{
-				Name:        "refresh",
 				Description: "Refresh secrets before TTL expires",
 				Command:     "secrets env --force",
 			},

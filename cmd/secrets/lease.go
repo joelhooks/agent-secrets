@@ -34,6 +34,7 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
+		const commandName = "secrets lease"
 
 		// Default client ID to hostname
 		if leaseClientID == "" {
@@ -61,21 +62,21 @@ Examples:
 					"To start it:\n  secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(userErr))
+				output.Print(output.Error(commandName, userErr))
 				return nil
 			}
-			output.Print(output.Error(fmt.Errorf("failed to acquire lease: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to acquire lease: %w", err)))
 			return nil
 		}
 
 		var result daemon.LeaseResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return nil
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return nil
 		}
 
@@ -100,12 +101,10 @@ Examples:
 
 		actions := []output.Action{
 			{
-				Name:        "export",
 				Description: "Export to environment",
 				Command:     fmt.Sprintf("export %s=$(secrets lease %s --raw)", envVarName, name),
 			},
 			{
-				Name:        "revoke",
 				Description: "Revoke this lease",
 				Command:     fmt.Sprintf("secrets revoke %s", result.LeaseID),
 			},
@@ -113,7 +112,7 @@ Examples:
 			output.ActionAudit(),
 		}
 
-		output.Print(output.Success("Lease acquired", leaseData, actions...))
+		output.Print(output.Success(commandName, leaseData, actions...))
 		return nil
 	},
 }

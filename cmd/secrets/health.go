@@ -28,27 +28,28 @@ Examples:
   secrets health --output json    # Machine-readable output
   secrets health --warnings       # Only show warnings`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets health"
 		resp, err := rpcCall(socketPath, daemon.MethodHealth, daemon.HealthParams{})
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to get health report: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to get health report: %w", err)))
 			return fmt.Errorf("failed to get health report: %w", err)
 		}
 
 		var result daemon.HealthResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return fmt.Errorf("failed to parse result: %w", err)
 		}
 
 		// If warnings-only mode and no warnings, short-circuit
 		if healthWarnings && len(result.Warnings) == 0 {
 			output.Print(output.Success(
-				"No health warnings detected",
+				commandName,
 				map[string]interface{}{
 					"status": "healthy",
 				},
@@ -85,6 +86,7 @@ Examples:
 		if len(result.Warnings) > 0 {
 			status = fmt.Sprintf("%d warning(s) detected", len(result.Warnings))
 		}
+		healthData["status"] = status
 
 		// Build contextual actions
 		var actions []output.Action
@@ -104,14 +106,12 @@ Examples:
 
 			if hasRotationWarnings {
 				actions = append(actions, output.Action{
-					Name:        "Configure rotation",
 					Command:     "secrets update <name> --rotate-via <command>",
 					Description: "Add rotation hook to secrets",
 				})
 			}
 			if hasExpiringWarnings {
 				actions = append(actions, output.Action{
-					Name:        "Revoke expiring leases",
 					Command:     "secrets revoke <lease-id>",
 					Description: "Manually revoke leases before expiration",
 				})
@@ -126,7 +126,7 @@ Examples:
 		}
 
 		output.Print(output.Success(
-			status,
+			commandName,
 			healthData,
 			actions...,
 		))

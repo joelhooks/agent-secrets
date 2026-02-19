@@ -20,6 +20,7 @@ and handles all secret operations (leases, revocations, etc.).
 
 Use --background to run as a background process.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets serve"
 		background, _ := cmd.Flags().GetBool("background")
 
 		// Load config
@@ -28,12 +29,12 @@ Use --background to run as a background process.`,
 		// Create and start daemon
 		d, err := daemon.NewDaemonWithOptions(cfg, skipPermissionCheck)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to create daemon: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to create daemon: %w", err)))
 			return err
 		}
 
 		if err := d.Start(); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to start daemon: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to start daemon: %w", err)))
 			return err
 		}
 
@@ -41,20 +42,22 @@ Use --background to run as a background process.`,
 			// For background mode, we'd fork - but for now just print and exit
 			// leaving the daemon running (user should use systemd or similar)
 			output.Print(output.Success(
-				"Daemon started",
+				commandName,
 				map[string]interface{}{
-					"socket": cfg.SocketPath,
-					"pid":    os.Getpid(),
+					"socket":  cfg.SocketPath,
+					"pid":     os.Getpid(),
+					"message": "Daemon started",
 				},
 			))
 			return nil
 		}
 
 		output.Print(output.Success(
-			"Daemon running",
+			commandName,
 			map[string]interface{}{
-				"socket": cfg.SocketPath,
-				"pid":    os.Getpid(),
+				"socket":  cfg.SocketPath,
+				"pid":     os.Getpid(),
+				"message": "Daemon running",
 			},
 		))
 
@@ -65,11 +68,13 @@ Use --background to run as a background process.`,
 
 		fmt.Println("\nShutting down...")
 		if err := d.Stop(); err != nil {
-			output.Print(output.Error(fmt.Errorf("shutdown error: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("shutdown error: %w", err)))
 			return err
 		}
 
-		output.Print(output.Success("Daemon stopped", nil))
+		output.Print(output.Success(commandName, map[string]interface{}{
+			"message": "Daemon stopped",
+		}))
 		return nil
 	},
 }

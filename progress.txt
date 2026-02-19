@@ -1,0 +1,43 @@
+# Progress Log for agent-secrets
+
+Initialized: 2026-02-19T00:53:40.149Z
+
+---
+[2026-02-19T01:03:26.431Z]
+Completed: Refactor response envelope to match cli-design standard
+Files: cmd/secrets/daemon_start_unix.go, cmd/secrets/daemon_start_windows.go, cmd/secrets/update.go, cmd/secrets/add.go, cmd/secrets/audit.go, cmd/secrets/cleanup.go, cmd/secrets/env.go, cmd/secrets/exec.go, cmd/secrets/health.go, cmd/secrets/init.go, cmd/secrets/lease.go, cmd/secrets/revoke.go, cmd/secrets/scan.go, cmd/secrets/serve.go, cmd/secrets/status.go, internal/output/output.go, internal/output/raw.go, internal/output/table.go, internal/types/exitcodes.go
+Summary: Refactored CLI output envelope to the joelclaw standard and updated all affected command call sites.
+
+Implemented:
+- `internal/output/output.go`:
+  - `Response` now uses `{ok, command, result, error, fix, next_actions}`
+  - Added `ErrorDetail {message, code}`
+  - Removed legacy envelope fields (`success`, `message`, `data`, `actions`, `update`) from JSON output
+  - Kept `ExitCode` for process control only (`json:"-"`)
+  - Updated helpers: `Success`, `Error`, `ErrorMsg`, `ErrorWithCode`, `ErrorMsgWithCode`, `FatalError`, `FatalMsg` to require `command`
+  - Updated `Action` to only `command` + `description`
+- `internal/output/raw.go`: switched formatter reads from `Result`; errors now read `ErrorDetail` + `Fix`
+- `internal/output/table.go`: switched to `OK/Result/Error/Fix/NextActions`
+- `internal/types/exitcodes.go`: added `ErrorCodeFromExitCode()` mapping for string error codes
+- Added TDD coverage in `internal/output/output_test.go` for envelope shape, code/fix behavior, and formatter behavior
+- Updated command output calls to pass command strings and new action shape in:
+  - `cmd/secrets/add.go`
+  - `cmd/secrets/audit.go`
+  - `cmd/secrets/cleanup.go`
+  - `cmd/secrets/env.go`
+  - `cmd/secrets/exec.go`
+  - `cmd/secrets/health.go`
+  - `cmd/secrets/init.go`
+  - `cmd/secrets/lease.go`
+  - `cmd/secrets/revoke.go`
+  - `cmd/secrets/scan.go`
+  - `cmd/secrets/status.go`
+  - plus `cmd/secrets/serve.go` and `cmd/secrets/update.go` for build consistency
+
+Prior failure pattern detected: unrelated hivemind matches from other repos can cause drift. Mitigation: I constrained changes strictly to this story’s envelope and call-site refactor.
+
+Also completed required ops:
+- Stored learning via `swarm memory store ...`
+- Sent completion event via `openclaw system event ...`
+
+No forbidden files were modified (`prd.json`, `progress.txt` unchanged).

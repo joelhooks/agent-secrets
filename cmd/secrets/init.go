@@ -15,6 +15,7 @@ var initCmd = &cobra.Command{
 	Long: `Initialize the agent-secrets encrypted store. This creates a new age identity
 and sets up the required directory structure.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets init"
 		// Load config (creates defaults if needed)
 		cfg := config.DefaultConfig()
 
@@ -23,14 +24,15 @@ and sets up the required directory structure.`,
 
 		// Initialize store (creates directories, identity, and empty secrets file)
 		if err := st.Init(); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to initialize: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to initialize: %w", err)))
 			return fmt.Errorf("failed to initialize: %w", err)
 		}
 
 		output.Print(output.Success(
-			"Store initialized successfully",
+			commandName,
 			map[string]interface{}{
-				"path": cfg.Directory,
+				"path":    cfg.Directory,
+				"message": "Store initialized successfully",
 			},
 			output.ActionsAfterInit()...,
 		))

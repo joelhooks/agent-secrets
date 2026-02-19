@@ -36,29 +36,30 @@ Examples:
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets exec"
 		// Find .secrets.json
 		cfg, projectDir, err := project.FindProjectConfig()
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to find project config: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
 			return err
 		}
 
 		// Get adapter for the configured source
 		adapter, err := getAdapter(cfg.Source)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to initialize adapter: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to initialize adapter: %w", err)))
 			return err
 		}
 
 		// Pull secrets
 		secrets, err := adapter.Pull(cfg.Project, cfg.Scope)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to pull secrets: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
 			return err
 		}
 
 		if len(secrets) == 0 {
-			output.Print(output.Error(fmt.Errorf("no secrets found for project %q in scope %q", cfg.Project, cfg.Scope)))
+			output.Print(output.Error(commandName, fmt.Errorf("no secrets found for project %q in scope %q", cfg.Project, cfg.Scope)))
 			return nil
 		}
 
@@ -76,7 +77,7 @@ Examples:
 		if execTTL != "" {
 			ttl, err := time.ParseDuration(execTTL)
 			if err != nil {
-				output.Print(output.Error(fmt.Errorf("invalid ttl: %w", err)))
+				output.Print(output.Error(commandName, fmt.Errorf("invalid ttl: %w", err)))
 				return err
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), ttl)
@@ -99,7 +100,7 @@ Examples:
 
 		// Start subprocess
 		if err := command.Start(); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to start command: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to start command: %w", err)))
 			return err
 		}
 
@@ -133,21 +134,22 @@ Examples:
 					// Return exit code
 					os.Exit(exitErr.ExitCode())
 				}
-				output.Print(output.Error(fmt.Errorf("command failed: %w", err)))
+				output.Print(output.Error(commandName, fmt.Errorf("command failed: %w", err)))
 				return err
 			}
 
 			// Success
 			data := map[string]interface{}{
-				"command":      strings.Join(args, " "),
-				"source":       cfg.Source,
-				"project":      cfg.Project,
-				"scope":        cfg.Scope,
+				"command":       strings.Join(args, " "),
+				"source":        cfg.Source,
+				"project":       cfg.Project,
+				"scope":         cfg.Scope,
 				"secrets_count": len(secrets),
-				"secret_keys":  secretKeys,
+				"secret_keys":   secretKeys,
 			}
 
-			output.Print(output.Success("Command executed with injected secrets", data))
+			data["message"] = "Command executed with injected secrets"
+			output.Print(output.Success(commandName, data))
 			return nil
 
 		case <-ctx.Done():
@@ -155,7 +157,7 @@ Examples:
 			if command.Process != nil {
 				command.Process.Kill()
 			}
-			output.Print(output.Error(fmt.Errorf("command exceeded TTL: %s", execTTL)))
+			output.Print(output.Error(commandName, fmt.Errorf("command exceeded TTL: %s", execTTL)))
 			return fmt.Errorf("timeout")
 		}
 	},

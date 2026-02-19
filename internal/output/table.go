@@ -12,34 +12,26 @@ type TableFormatter struct{}
 
 // Format implements the Formatter interface for table output
 func (f *TableFormatter) Format(r Response) error {
-	if r.Success {
-		if r.Message != "" {
-			fmt.Printf("✓ %s\n", r.Message)
-		}
-		if r.Data != nil {
-			if err := printTable(r.Data); err != nil {
+	if r.OK {
+		if r.Result != nil {
+			if err := printTable(r.Result); err != nil {
 				return err
 			}
 		}
 	} else {
-		fmt.Printf("✗ Error: %s\n", r.Error)
-	}
-
-	// Print update warning
-	if r.Update != nil && r.Update.Available {
-		fmt.Printf("\n⚠ Update available: %s → %s\n", r.Update.CurrentVersion, r.Update.LatestVersion)
-		fmt.Printf("  Run: %s\n", r.Update.Command)
+		if r.Error != nil {
+			fmt.Printf("✗ Error: %s\n", r.Error.Message)
+		}
+		if r.Fix != "" {
+			fmt.Printf("  Fix: %s\n", r.Fix)
+		}
 	}
 
 	// Print available actions
-	if len(r.Actions) > 0 {
+	if len(r.NextActions) > 0 {
 		fmt.Println("\nNext steps:")
-		for _, a := range r.Actions {
-			prefix := "→"
-			if a.Dangerous {
-				prefix = "⚠"
-			}
-			fmt.Printf("  %s %s\n", prefix, a.Description)
+		for _, a := range r.NextActions {
+			fmt.Printf("  → %s\n", a.Description)
 			fmt.Printf("    $ %s\n", a.Command)
 		}
 	}

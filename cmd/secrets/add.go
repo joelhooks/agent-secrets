@@ -31,6 +31,7 @@ var addCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		value := addValue
+		const commandName = "secrets add"
 
 		// If no value provided via flag, check stdin or prompt
 		if value == "" {
@@ -77,21 +78,21 @@ var addCmd = &cobra.Command{
 					"To start it:\n  secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(userErr))
+				output.Print(output.Error(commandName, userErr))
 				return userErr
 			}
-			output.Print(output.Error(fmt.Errorf("failed to add secret: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to add secret: %w", err)))
 			return fmt.Errorf("failed to add secret: %w", err)
 		}
 
 		var result daemon.AddResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return fmt.Errorf("failed to parse response: %w", err)
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return fmt.Errorf("failed to parse result: %w", err)
 		}
 
@@ -102,15 +103,16 @@ var addCmd = &cobra.Command{
 			}
 
 			output.Print(output.Success(
-				msg,
+				commandName,
 				map[string]interface{}{
+					"message":    msg,
 					"name":       name,
 					"rotate_via": addRotateVia,
 				},
 				output.ActionsAfterAdd(name)...,
 			))
 		} else {
-			output.Print(output.ErrorMsg(result.Message))
+			output.Print(output.ErrorMsg(commandName, result.Message))
 			return fmt.Errorf("failed to add secret: %s", result.Message)
 		}
 

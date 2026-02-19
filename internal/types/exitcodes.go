@@ -77,3 +77,27 @@ func IsStoreCorrupted(err error) bool {
 func IsConnectionError(err error) bool {
 	return err == ErrConnectionFailed || err == ErrSocketExists
 }
+
+// ErrorCodeFromExitCode maps process exit codes to stable string error codes for JSON output.
+func ErrorCodeFromExitCode(exitCode int) string {
+	switch exitCode {
+	case ExitSuccess:
+		return "success"
+	case ExitMisuse:
+		return "misuse"
+	case ExitDataError:
+		return "data_error"
+	case ExitTimeout:
+		return "timeout"
+	case ExitIOError:
+		return "io_error"
+	case ExitProtocolError:
+		return "protocol_error"
+	case ExitDaemonUnavailable:
+		return "daemon_unavailable"
+	case ExitInternalError:
+		return "internal_error"
+	default:
+		return "generic_error"
+	}
+}

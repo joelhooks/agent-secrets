@@ -22,27 +22,28 @@ Examples:
   secrets revoke --all              # Revoke all leases (killswitch)`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		const commandName = "secrets revoke"
 		if revokeAll {
 			// Trigger killswitch - revoke all
 			resp, err := rpcCall(socketPath, daemon.MethodRevokeAll, daemon.RevokeAllParams{})
 			if err != nil {
-				output.Print(output.Error(fmt.Errorf("failed to revoke all leases: %w", err)))
+				output.Print(output.Error(commandName, fmt.Errorf("failed to revoke all leases: %w", err)))
 				return nil
 			}
 
 			var result daemon.RevokeAllResult
 			data, err := json.Marshal(resp.Result)
 			if err != nil {
-				output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+				output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 				return nil
 			}
 			if err := json.Unmarshal(data, &result); err != nil {
-				output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+				output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 				return nil
 			}
 
 			if !result.Success {
-				output.Print(output.ErrorMsg(result.Message))
+				output.Print(output.ErrorMsg(commandName, result.Message))
 				return nil
 			}
 
@@ -55,13 +56,13 @@ Examples:
 				output.ActionAudit(),
 			}
 
-			output.Print(output.Success("Killswitch triggered: all leases revoked", killswitchData, actions...))
+			output.Print(output.Success(commandName, killswitchData, actions...))
 			return nil
 		}
 
 		// Revoke specific lease
 		if len(args) == 0 {
-			output.Print(output.ErrorMsg("lease-id required (or use --all for killswitch)", output.ActionHelp("revoke")))
+			output.Print(output.ErrorMsg(commandName, "lease-id required (or use --all for killswitch)", output.ActionHelp("revoke")))
 			return nil
 		}
 
@@ -72,23 +73,23 @@ Examples:
 
 		resp, err := rpcCall(socketPath, daemon.MethodRevoke, params)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to revoke lease: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to revoke lease: %w", err)))
 			return nil
 		}
 
 		var result daemon.RevokeResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse response: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			return nil
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(fmt.Errorf("failed to parse result: %w", err)))
+			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			return nil
 		}
 
 		if !result.Success {
-			output.Print(output.ErrorMsg(result.Message))
+			output.Print(output.ErrorMsg(commandName, result.Message))
 			return nil
 		}
 
@@ -101,7 +102,7 @@ Examples:
 			output.ActionAudit(),
 		}
 
-		output.Print(output.Success("Lease revoked successfully", revokeData, actions...))
+		output.Print(output.Success(commandName, revokeData, actions...))
 		return nil
 	},
 }
