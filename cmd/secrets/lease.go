@@ -59,10 +59,18 @@ Examples:
 				userErr := types.NewUserError(
 					"Failed to connect to daemon",
 					"The daemon doesn't appear to be running. Without the daemon, secrets cannot be leased.",
-					"To start it:\n  secrets serve &",
+					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(commandName, userErr))
+				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
+				return nil
+			}
+			if strings.Contains(strings.ToLower(err.Error()), "secret not found") {
+				output.Print(output.ErrorWithFix(
+					commandName,
+					fmt.Errorf("failed to acquire lease: %w", err),
+					"Check available secrets: secrets status",
+				))
 				return nil
 			}
 			output.Print(output.Error(commandName, fmt.Errorf("failed to acquire lease: %w", err)))

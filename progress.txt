@@ -103,3 +103,24 @@ In this codebase, root no-args discovery output is best implemented by adding `R
 Tests that execute root commands should set `noUpdateCheck = true`; otherwise `PersistentPreRunE` may run background update checks and make stdout assertions brittle.
 ### Files Context
 `cmd/secrets/root.go` controls root command behavior and persistent pre-run hooks; `cmd/secrets/root_test.go` now contains no-args JSON contract coverage and stdout-capture helpers for root execution tests.
+
+---
+[2026-02-19T01:22:19.918Z]
+Completed: Add fix field to all error responses
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/root.go, cmd/secrets/root_test.go, prd.json, progress.txt, cmd/secrets/add.go, cmd/secrets/lease.go, cmd/secrets/lease_test.go, cmd/secrets/status.go, internal/output/output.go, internal/output/output_test.go, internal/types/errors.go
+Summary: Implemented `story-mlsr0zv6` with TDD and full validation passing.
+
+Key updates:
+- Added centralized fix inference and explicit fix helpers in `internal/output/output.go` so every JSON error envelope includes actionable `fix` text, including all required categories (daemon not running, secret/lease not found, secret exists, empty value, store not initialized, permission errors, socket timeout).
+- Updated lease command error paths to emit standard fix text for daemon connectivity and secret-not-found cases in `cmd/secrets/lease.go`.
+- Added add-command empty-value JSON error handling with required fix text and aligned daemon fix wording in `cmd/secrets/add.go`.
+- Aligned status daemon error handling to use standard daemon fix in `cmd/secrets/status.go`.
+- Updated `types.UserError` JSON mapping so `Suggestion` serializes as `fix`, and added `Fix()` normalization helper in `internal/types/errors.go`.
+- Added/expanded tests for fix inference and lease command behavior in `internal/output/output_test.go` and `cmd/secrets/lease_test.go`.
+
+Validation run:
+- `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...` (pass)
+
+Operational requirements completed:
+- Stored hivemind learning via `swarm memory store ...` (memory id `mem-1e997c237a3c3468`).
+- Sent progress event via `openclaw system event --mode now --text "Ralph: completed Add fix field to all error responses"`.

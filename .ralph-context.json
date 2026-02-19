@@ -78,6 +78,29 @@
         "internal/update/update.go"
       ],
       "learnings": "Technical Discovery: Removing `HumanMode`/`OutputFormat` from `internal/output/output.go` requires scanning outside `internal/output`; `internal/update/update.go` had a hidden dependency (`CheckForUpdateInBackground`) that breaks compilation and JSON-only behavior if left in place.\nGotcha: JSON output escapes `&` as `\\u0026` by default, so tests should decode JSON and assert fields instead of raw substring matching for fix messages or commands.\nFiles Context: `cmd/secrets/root.go` controls global CLI flags and pre-run behavior; `internal/output/formatter.go` is now a JSON-only shim; `internal/output/output.go` is the envelope/printing core; `internal/update/update.go` can inject background stderr noise if not kept JSON-safe; `cmd/secrets/root_test.go` and `internal/output/*_test.go` are the key guardrails for this story."
+    },
+    {
+      "id": "story-mlsr0q1z",
+      "title": "Self-documenting root command with command tree",
+      "status": "completed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/health.go",
+        "cmd/secrets/lease_test.go",
+        "cmd/secrets/root.go",
+        "cmd/secrets/root_test.go",
+        "cmd/secrets/scan.go",
+        "internal/output/formatter.go",
+        "internal/output/formatter_test.go",
+        "internal/output/output.go",
+        "internal/output/output_test.go",
+        "internal/output/table.go",
+        "internal/update/update.go",
+        "prd.json",
+        "progress.txt"
+      ],
+      "learnings": "Technical Discovery: `cmd/secrets/root.go` can override Cobra’s default no-args help with `rootCmd.Run` and still keep detailed help available via `--help`; emitting through `output.Success` preserves the standard response envelope automatically.\nGotcha: `rootCmd.Execute()` in tests can trigger `PersistentPreRunE` update checks unless `noUpdateCheck` is forced true. Keep this isolated in root tests to avoid nondeterministic behavior.\nFiles Context: `cmd/secrets/root.go` now contains the command-tree contract (description/version/commands/next_actions). `cmd/secrets/root_test.go` validates this contract and includes reusable stdout capture + test-global setup helpers."
     }
   ],
   "failures": []

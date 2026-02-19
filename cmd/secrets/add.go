@@ -43,6 +43,7 @@ var addCmd = &cobra.Command{
 					value = scanner.Text()
 				}
 				if err := scanner.Err(); err != nil {
+					output.Print(output.Error(commandName, fmt.Errorf("failed to read from stdin: %w", err)))
 					return fmt.Errorf("failed to read from stdin: %w", err)
 				}
 			} else {
@@ -50,6 +51,7 @@ var addCmd = &cobra.Command{
 				fmt.Printf("Enter secret value for '%s': ", name)
 				byteValue, err := term.ReadPassword(int(syscall.Stdin))
 				if err != nil {
+					output.Print(output.Error(commandName, fmt.Errorf("failed to read password: %w", err)))
 					return fmt.Errorf("failed to read password: %w", err)
 				}
 				fmt.Println() // Add newline after hidden input
@@ -59,6 +61,12 @@ var addCmd = &cobra.Command{
 
 		value = strings.TrimSpace(value)
 		if value == "" {
+			output.Print(output.ErrorMsgWithFix(
+				commandName,
+				"secret value cannot be empty",
+				"Provide a value via --value, stdin pipe, or interactive prompt",
+				output.ActionHelp("add"),
+			))
 			return fmt.Errorf("secret value cannot be empty")
 		}
 
@@ -75,10 +83,10 @@ var addCmd = &cobra.Command{
 				userErr := types.NewUserError(
 					"Failed to connect to daemon",
 					"The daemon doesn't appear to be running. Without the daemon, secrets cannot be added.",
-					"To start it:\n  secrets serve &",
+					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(commandName, userErr))
+				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 				return userErr
 			}
 			output.Print(output.Error(commandName, fmt.Errorf("failed to add secret: %w", err)))

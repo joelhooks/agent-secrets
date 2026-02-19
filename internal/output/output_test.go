@@ -3,11 +3,13 @@ package output
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/joelhooks/agent-secrets/internal/store"
 	"github.com/joelhooks/agent-secrets/internal/types"
 )
 
@@ -135,6 +137,66 @@ func TestErrorWithCodeUsesMappedCode(t *testing.T) {
 	}
 	if resp.Error.Code != "timeout" {
 		t.Fatalf("expected timeout code, got %q", resp.Error.Code)
+	}
+}
+
+func TestErrorInfersDaemonFix(t *testing.T) {
+	resp := Error("secrets status", errors.New("failed to connect to daemon at /tmp/agent-secrets.sock: connect: connection refused (is the daemon running?)"))
+	if resp.Fix != "Start the daemon: secrets serve &" {
+		t.Fatalf("expected daemon fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorInfersStoreNotInitializedFix(t *testing.T) {
+	resp := Error("secrets lease", fmt.Errorf("failed to acquire lease: %w", types.ErrStoreNotInitialized))
+	if resp.Fix != "Initialize the store: secrets init" {
+		t.Fatalf("expected store init fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorInfersPermissionFix(t *testing.T) {
+	resp := Error("secrets serve", &store.PermissionError{
+		Path:     "/tmp/identity.age",
+		Current:  0644,
+		Expected: 0600,
+	})
+	if resp.Fix != "Check file permissions on ~/.agent-secrets/ or use --skip-permission-check" {
+		t.Fatalf("expected permission fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorInfersSocketTimeoutFix(t *testing.T) {
+	resp := Error("secrets status", errors.New("daemon unresponsive (timeout after 5s)"))
+	if resp.Fix != "Daemon may be overloaded. Check: secrets health" {
+		t.Fatalf("expected timeout fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorInfersSecretExistsFix(t *testing.T) {
+	resp := Error("secrets add", errors.New("failed to add secret: RPC error -32000: secret \"github_token\": secret already exists"))
+	if resp.Fix != "Use a different name, or update the existing secret" {
+		t.Fatalf("expected secret-exists fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorInfersLeaseNotFoundFix(t *testing.T) {
+	resp := Error("secrets revoke", errors.New("failed to revoke lease: RPC error -32002: lease not found"))
+	if resp.Fix != "Check active leases: secrets status" {
+		t.Fatalf("expected lease-not-found fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorMsgWithFixUsesProvidedFix(t *testing.T) {
+	resp := ErrorMsgWithFix("secrets add", "secret value cannot be empty", "Provide a value via --value, stdin pipe, or interactive prompt")
+	if resp.Fix != "Provide a value via --value, stdin pipe, or interactive prompt" {
+		t.Fatalf("expected provided fix, got %q", resp.Fix)
+	}
+}
+
+func TestErrorMsgInfersEmptyValueFix(t *testing.T) {
+	resp := ErrorMsg("secrets add", "secret value cannot be empty")
+	if resp.Fix != "Provide a value via --value, stdin pipe, or interactive prompt" {
+		t.Fatalf("expected empty-value fix, got %q", resp.Fix)
 	}
 }
 

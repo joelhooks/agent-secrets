@@ -55,7 +55,7 @@
       "title": "Add fix field to all error responses",
       "description": "Per cli-design standard: every error response must include a `fix` field with plain-language remediation.\n\nReview ALL commands in cmd/secrets/ and ensure every error path includes actionable fix text:\n\n1. **Daemon not running errors** (most commands): fix = \"Start the daemon: secrets serve &\"\n2. **Secret not found** (lease): fix = \"Check available secrets: secrets status\"\n3. **Secret already exists** (add): fix = \"Use a different name, or update the existing secret\"\n4. **Lease not found** (revoke): fix = \"Check active leases: secrets status\"\n5. **Empty value** (add): fix = \"Provide a value via --value, stdin pipe, or interactive prompt\"\n6. **Store not initialized** (any): fix = \"Initialize the store: secrets init\"\n7. **Permission errors**: fix = \"Check file permissions on ~/.agent-secrets/ or use --skip-permission-check\"\n8. **Socket timeout**: fix = \"Daemon may be overloaded. Check: secrets health\"\n\nUpdate the output.Error() and output.ErrorMsg() helpers to accept an optional fix string, or add a new ErrorWithFix() helper. Make sure the `fix` field appears in the JSON envelope.\n\nAlso update `internal/types/errors.go` UserError type to map to the new error envelope structure (it already has Suggestion field — make sure that becomes `fix` in the JSON output).",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "internal/output/output.go",
@@ -88,7 +88,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 4,
-    "lastIteration": "2026-02-19T01:15:21.914Z"
+    "totalIterations": 5,
+    "lastIteration": "2026-02-19T01:22:19.918Z"
   }
 }

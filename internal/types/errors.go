@@ -4,51 +4,52 @@ package types
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Sentinel errors for the agent-secrets system.
 var (
 	// Store errors
-	ErrSecretNotFound     = errors.New("secret not found")
-	ErrSecretExists       = errors.New("secret already exists")
+	ErrSecretNotFound      = errors.New("secret not found")
+	ErrSecretExists        = errors.New("secret already exists")
 	ErrStoreNotInitialized = errors.New("store not initialized")
-	ErrStoreCorrupted     = errors.New("store data corrupted")
+	ErrStoreCorrupted      = errors.New("store data corrupted")
 
 	// Encryption errors
-	ErrEncryptionFailed   = errors.New("encryption failed")
-	ErrDecryptionFailed   = errors.New("decryption failed")
-	ErrInvalidIdentity    = errors.New("invalid age identity")
-	ErrIdentityNotFound   = errors.New("identity file not found")
+	ErrEncryptionFailed = errors.New("encryption failed")
+	ErrDecryptionFailed = errors.New("decryption failed")
+	ErrInvalidIdentity  = errors.New("invalid age identity")
+	ErrIdentityNotFound = errors.New("identity file not found")
 
 	// Lease errors
-	ErrLeaseNotFound      = errors.New("lease not found")
-	ErrLeaseExpired       = errors.New("lease has expired")
-	ErrLeaseRevoked       = errors.New("lease has been revoked")
-	ErrInvalidTTL         = errors.New("invalid TTL duration")
+	ErrLeaseNotFound = errors.New("lease not found")
+	ErrLeaseExpired  = errors.New("lease has expired")
+	ErrLeaseRevoked  = errors.New("lease has been revoked")
+	ErrInvalidTTL    = errors.New("invalid TTL duration")
 
 	// Rotation errors
-	ErrRotationFailed     = errors.New("rotation hook failed")
-	ErrNoRotationHook     = errors.New("no rotation hook configured")
-	ErrRotationTimeout    = errors.New("rotation hook timed out")
+	ErrRotationFailed  = errors.New("rotation hook failed")
+	ErrNoRotationHook  = errors.New("no rotation hook configured")
+	ErrRotationTimeout = errors.New("rotation hook timed out")
 
 	// Killswitch errors
-	ErrKillswitchActive   = errors.New("killswitch is active")
+	ErrKillswitchActive = errors.New("killswitch is active")
 
 	// Daemon errors
-	ErrDaemonNotRunning   = errors.New("daemon is not running")
+	ErrDaemonNotRunning     = errors.New("daemon is not running")
 	ErrDaemonAlreadyRunning = errors.New("daemon is already running")
-	ErrSocketExists       = errors.New("socket file already exists")
-	ErrConnectionFailed   = errors.New("connection to daemon failed")
+	ErrSocketExists         = errors.New("socket file already exists")
+	ErrConnectionFailed     = errors.New("connection to daemon failed")
 
 	// Heartbeat errors
-	ErrHeartbeatFailed    = errors.New("heartbeat check failed")
-	ErrHeartbeatTimeout   = errors.New("heartbeat timed out")
+	ErrHeartbeatFailed  = errors.New("heartbeat check failed")
+	ErrHeartbeatTimeout = errors.New("heartbeat timed out")
 
 	// Audit errors
-	ErrAuditWriteFailed   = errors.New("failed to write audit entry")
+	ErrAuditWriteFailed = errors.New("failed to write audit entry")
 
 	// Adapter errors
-	ErrAdapterFailed      = errors.New("adapter operation failed")
+	ErrAdapterFailed = errors.New("adapter operation failed")
 )
 
 // SecretError wraps an error with the secret name for context.
@@ -136,11 +137,11 @@ func (e ErrAdapterNotAvailable) Unwrap() error {
 // UserError provides structured, user-friendly error messages with actionable suggestions.
 // Pattern: What went wrong + Why it matters + How to fix + Help reference
 type UserError struct {
-	What       string            // What went wrong (brief, technical summary)
-	Why        string            // Why it matters (user impact)
-	Suggestion string            // How to fix it (actionable next step)
-	HelpRef    string            // Reference to help docs or command
-	Context    map[string]string // Additional contextual details (e.g., socket path, secret name)
+	What       string            `json:"what"`              // What went wrong (brief, technical summary)
+	Why        string            `json:"why,omitempty"`     // Why it matters (user impact)
+	Suggestion string            `json:"fix,omitempty"`     // How to fix it (actionable next step)
+	HelpRef    string            `json:"help,omitempty"`    // Reference to help docs or command
+	Context    map[string]string `json:"context,omitempty"` // Additional contextual details (e.g., socket path, secret name)
 }
 
 func (e *UserError) Error() string {
@@ -190,6 +191,11 @@ func NewUserError(what, why, suggestion, helpRef string) *UserError {
 func (e *UserError) WithContext(key, value string) *UserError {
 	e.Context[key] = value
 	return e
+}
+
+// Fix returns the normalized remediation text for JSON error envelopes.
+func (e *UserError) Fix() string {
+	return strings.TrimSpace(e.Suggestion)
 }
 
 // RPCErrorFromError converts a Go error to an RPCError with appropriate code.

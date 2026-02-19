@@ -24,10 +24,10 @@ var statusCmd = &cobra.Command{
 				userErr := types.NewUserError(
 					"Failed to connect to daemon",
 					"The daemon doesn't appear to be running. Without the daemon, status cannot be retrieved.",
-					"To start it:\n  secrets serve &",
+					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.Error(commandName, userErr))
+				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 				return userErr
 			}
 			output.Print(output.Error(commandName, fmt.Errorf("failed to get status: %w", err)))

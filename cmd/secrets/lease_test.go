@@ -82,6 +82,52 @@ func TestLeaseRunEWithJSONFlagOutputsEnvelope(t *testing.T) {
 	}
 }
 
+func TestLeaseRunEDaemonConnectionErrorUsesStandardFix(t *testing.T) {
+	restore := setLeaseTestGlobals(filepath.Join(t.TempDir(), "missing.sock"))
+	defer restore()
+
+	if err := leaseCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatalf("failed to set --json flag: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = leaseCmd.Flags().Set("json", "false")
+	})
+
+	out := captureLeaseStdout(t, func() {
+		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
+			t.Fatalf("RunE failed: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, `"fix": "Start the daemon: secrets serve \u0026"`) {
+		t.Fatalf("expected daemon fix in output, got %q", out)
+	}
+}
+
+func TestLeaseRunESecretNotFoundUsesStandardFix(t *testing.T) {
+	socket := startLeaseRPCErrorServer(t, types.RPCSecretNotFound, "secret \"github_token\": secret not found")
+
+	restore := setLeaseTestGlobals(socket)
+	defer restore()
+
+	if err := leaseCmd.Flags().Set("json", "true"); err != nil {
+		t.Fatalf("failed to set --json flag: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = leaseCmd.Flags().Set("json", "false")
+	})
+
+	out := captureLeaseStdout(t, func() {
+		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
+			t.Fatalf("RunE failed: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, `"fix": "Check available secrets: secrets status"`) {
+		t.Fatalf("expected secret-not-found fix in output, got %q", out)
+	}
+}
+
 func setLeaseTestGlobals(testSocket string) func() {
 	origSocketPath := socketPath
 	origLeaseTTL := leaseTTL
@@ -126,6 +172,44 @@ func startLeaseRPCServer(t *testing.T, result daemon.LeaseResult) string {
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Result:  result,
+		}
+		_ = json.NewEncoder(conn).Encode(resp)
+	}()
+
+	return socket
+}
+
+func startLeaseRPCErrorServer(t *testing.T, code int, message string) string {
+	t.Helper()
+
+	socket := filepath.Join(t.TempDir(), "agent-secrets-error.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatalf("failed to listen on unix socket: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = listener.Close()
+	})
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		var req types.RPCRequest
+		if err := json.NewDecoder(conn).Decode(&req); err != nil {
+			return
+		}
+
+		resp := types.RPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error: &types.RPCError{
+				Code:    code,
+				Message: message,
+			},
 		}
 		_ = json.NewEncoder(conn).Encode(resp)
 	}()

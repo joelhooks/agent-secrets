@@ -87,6 +87,7 @@ func Error(command string, err error, actions ...Action) Response {
 // ErrorMsg creates an error response from a string.
 func ErrorMsg(command, msg string, actions ...Action) Response {
 	exitCode := types.ExitGenericError
+	fix := inferFix(nil, msg, defaultFix)
 	return Response{
 		OK:      false,
 		Command: command,
@@ -94,7 +95,7 @@ func ErrorMsg(command, msg string, actions ...Action) Response {
 			Message: msg,
 			Code:    types.ErrorCodeFromExitCode(exitCode),
 		},
-		Fix:         defaultFix,
+		Fix:         fix,
 		NextActions: actions,
 		ExitCode:    exitCode,
 	}
@@ -116,6 +117,7 @@ func ErrorWithCode(command string, err error, exitCode int, actions ...Action) R
 
 // ErrorMsgWithCode creates an error response from a string with specific exit code.
 func ErrorMsgWithCode(command, msg string, exitCode int, actions ...Action) Response {
+	fix := inferFix(nil, msg, defaultFix)
 	return Response{
 		OK:      false,
 		Command: command,
@@ -123,7 +125,7 @@ func ErrorMsgWithCode(command, msg string, exitCode int, actions ...Action) Resp
 			Message: msg,
 			Code:    types.ErrorCodeFromExitCode(exitCode),
 		},
-		Fix:         defaultFix,
+		Fix:         fix,
 		NextActions: actions,
 		ExitCode:    exitCode,
 	}
@@ -156,6 +158,17 @@ func printJSON(r Response) error {
 
 const defaultFix = "Review the error details and run `secrets --help` for usage."
 
+const (
+	fixDaemonNotRunning    = "Start the daemon: secrets serve &"
+	fixSecretNotFound      = "Check available secrets: secrets status"
+	fixSecretExists        = "Use a different name, or update the existing secret"
+	fixLeaseNotFound       = "Check active leases: secrets status"
+	fixEmptyValue          = "Provide a value via --value, stdin pipe, or interactive prompt"
+	fixStoreNotInitialized = "Initialize the store: secrets init"
+	fixPermissionError     = "Check file permissions on ~/.agent-secrets/ or use --skip-permission-check"
+	fixSocketTimeout       = "Daemon may be overloaded. Check: secrets health"
+)
+
 func buildErrorDetail(err error, exitCode int) (*ErrorDetail, string) {
 	if err == nil {
 		return &ErrorDetail{
@@ -172,15 +185,89 @@ func buildErrorDetail(err error, exitCode int) (*ErrorDetail, string) {
 		if userErr.What != "" {
 			message = userErr.What
 		}
-		if userErr.Suggestion != "" {
-			fix = strings.TrimSpace(userErr.Suggestion)
+		if userErr.Fix() != "" {
+			fix = userErr.Fix()
 		}
 	}
+
+	fix = inferFix(err, message, fix)
 
 	return &ErrorDetail{
 		Message: message,
 		Code:    types.ErrorCodeFromExitCode(exitCode),
 	}, fix
+}
+
+// ErrorWithFix creates an error response and forces a specific fix message.
+func ErrorWithFix(command string, err error, fix string, actions ...Action) Response {
+	resp := Error(command, err, actions...)
+	if trimmed := strings.TrimSpace(fix); trimmed != "" {
+		resp.Fix = trimmed
+	}
+	return resp
+}
+
+// ErrorMsgWithFix creates an error response from a string with an explicit fix.
+func ErrorMsgWithFix(command, msg, fix string, actions ...Action) Response {
+	resp := ErrorMsg(command, msg, actions...)
+	if trimmed := strings.TrimSpace(fix); trimmed != "" {
+		resp.Fix = trimmed
+	}
+	return resp
+}
+
+func inferFix(err error, message, fallback string) string {
+	msg := strings.ToLower(strings.TrimSpace(message))
+	if msg == "" && err != nil {
+		msg = strings.ToLower(strings.TrimSpace(err.Error()))
+	}
+
+	switch {
+	case isSocketTimeoutError(err, msg):
+		return fixSocketTimeout
+	case isPermissionError(err, msg):
+		return fixPermissionError
+	case errors.Is(err, types.ErrStoreNotInitialized), strings.Contains(msg, "store not initialized"):
+		return fixStoreNotInitialized
+	case errors.Is(err, types.ErrSecretNotFound), strings.Contains(msg, "secret not found"):
+		return fixSecretNotFound
+	case errors.Is(err, types.ErrSecretExists), strings.Contains(msg, "secret already exists"):
+		return fixSecretExists
+	case errors.Is(err, types.ErrLeaseNotFound), strings.Contains(msg, "lease not found"):
+		return fixLeaseNotFound
+	case strings.Contains(msg, "secret value cannot be empty"),
+		strings.Contains(msg, "secret value is required"),
+		strings.Contains(msg, "empty value"):
+		return fixEmptyValue
+	case isDaemonNotRunningError(err, msg):
+		return fixDaemonNotRunning
+	}
+
+	return fallback
+}
+
+func isDaemonNotRunningError(err error, message string) bool {
+	if errors.Is(err, types.ErrDaemonNotRunning) || errors.Is(err, types.ErrConnectionFailed) {
+		return true
+	}
+
+	return strings.Contains(message, "failed to connect to daemon") ||
+		strings.Contains(message, "is the daemon running") ||
+		strings.Contains(message, "connection refused")
+}
+
+func isSocketTimeoutError(_ error, message string) bool {
+	return strings.Contains(message, "daemon connection timeout") ||
+		strings.Contains(message, "daemon unresponsive") ||
+		(strings.Contains(message, "failed to connect to daemon") && strings.Contains(message, "timeout")) ||
+		(strings.Contains(message, "daemon") && strings.Contains(message, "i/o timeout"))
+}
+
+func isPermissionError(_ error, message string) bool {
+	return strings.Contains(message, "insecure permissions") ||
+		strings.Contains(message, "key file has insecure permissions") ||
+		strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "failed to set socket permissions")
 }
 
 // Common action builders.
