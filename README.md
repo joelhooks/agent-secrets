@@ -42,6 +42,11 @@ sudo mv secrets /usr/local/bin/
 go install github.com/joelhooks/agent-secrets/cmd/secrets@latest
 ```
 
+**Add the OpenClaw skill (teaches your agent how to use it):**
+```bash
+npx openclaw skills add https://github.com/joelhooks/agent-secrets
+```
+
 **Verify (self-documenting root command):**
 ```bash
 secrets
