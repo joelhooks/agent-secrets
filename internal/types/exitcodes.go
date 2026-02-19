@@ -1,6 +1,8 @@
 // Package types defines exit codes following standard Unix conventions.
 package types
 
+import "errors"
+
 // Exit codes for the secrets CLI.
 // These follow standard Unix/BSD sysexits.h conventions where applicable.
 const (
@@ -63,19 +65,19 @@ func ExitCodeFromError(err error) int {
 
 // Helper functions to check error types
 func IsRotationTimeout(err error) bool {
-	return err == ErrRotationTimeout
+	return errors.Is(err, ErrRotationTimeout)
 }
 
 func IsDaemonError(err error) bool {
-	return err == ErrDaemonNotRunning || err == ErrConnectionFailed
+	return errors.Is(err, ErrDaemonNotRunning) || errors.Is(err, ErrConnectionFailed)
 }
 
 func IsStoreCorrupted(err error) bool {
-	return err == ErrStoreCorrupted
+	return errors.Is(err, ErrStoreCorrupted)
 }
 
 func IsConnectionError(err error) bool {
-	return err == ErrConnectionFailed || err == ErrSocketExists
+	return errors.Is(err, ErrConnectionFailed) || errors.Is(err, ErrSocketExists)
 }
 
 // ErrorCodeFromExitCode maps process exit codes to stable string error codes for JSON output.

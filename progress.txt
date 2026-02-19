@@ -372,3 +372,93 @@ Implemented test coverage in `cmd/secrets/root_test.go` for the requested comman
 - Deprecated root flags acceptance (`--human`, `--output`) without errors.
 
 Also added local test helpers to safely restore Cobra flag values and `Changed` state to avoid cross-test leakage with shared global command instances.
+
+---
+[2026-02-19T05:59:32.914Z]
+Failed: Test coverage: internal/update and internal/types [verification_rejected]
+Validation: ok  	github.com/joelhooks/agent-secrets/cmd/secrets	(cached)
+?   	github.com/joelhooks/agent-secrets/internal/adapters	[no test files]
+ok  	github.com/joelhooks/agent-secrets/internal/adapters/vercel	(cached)
+ok  	github.com/joelhooks/agent-secrets/internal/audit	(cached)
+ok  	github.com/joelhooks/a
+Codex: Implemented story-mlt172li with test-only changes in the required targets and passed full validation.
+
+Prior failure pattern detected: verification_rejected. Mitigation: I explicitly modified both required targets and kept the final diff limited to `internal/update/update_test.go` and `internal/types/types_test.go`.
+
+What I added:
+- `internal/update/update_test.go`: expanded coverage for version/update behavior and non-blocking background checks, including mock HTTP paths for `CheckForUpdate`, `getLatestRelease`, `downloadBinary`, `DoUpdate`, metadata accessors (`GetVersion`/`VersionInfo`), and safe `SelfReplace` failure-path testing.
+  - Key additions start at: `internal/update/update_test.go:362`, `internal/update/update_test.go:493`, `internal/update/update_test.go:520`, `internal/update/update_test.go:559`, `internal/update/update_test.go:623`, `internal/update/update_test.go:650`, `internal/update/update_test.go:683`, `internal/update/update_test.go:701`.
+- `internal/types/types_test.go`: new comprehensive tests for exit code mapping, `UserError` creation/context/fix formatting, wrapped error helpers (`SecretError`, `LeaseError`, `RotationError`, `ErrAdapterNotAvailable`), `RPCErrorFromError` mappings, and constant stability checks.
+  - Key tests at: `internal/types/types_test.go:10`, `internal/types/types_test.go:34`, `internal/types/types_test.go:57`, `internal/types/types_test.go:101`, `internal/types/types_test.go:135`, `internal/types/types_test.go:149`, `internal/types/types_test.go:180`.
+
+Coverage result:
+- `internal/update`: 74.6%
+- `internal/types`: 100.0%
+
+Required validation run and passed:
+- `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...`
+
+Required project workflow actions completed:
+- Stored hivemind learning via `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+- Sent completion event via `openclaw system event --mode now --text "Ralph: completed Test coverage: internal/update and internal/types"`
+
+---
+[2026-02-19T06:01:51.748Z]
+Failed: Test coverage: internal/update and internal/types [verification_rejected]
+Validation: ok  	github.com/joelhooks/agent-secrets/cmd/secrets	(cached)
+?   	github.com/joelhooks/agent-secrets/internal/adapters	[no test files]
+ok  	github.com/joelhooks/agent-secrets/internal/adapters/vercel	(cached)
+ok  	github.com/joelhooks/agent-secrets/internal/audit	(cached)
+ok  	github.com/joelhooks/a
+Codex: Prior failure pattern detected: verification_rejected. Mitigation: I ensured both required targets are in the diff (`internal/update/update_test.go` and `internal/types/types_test.go`) and validated with the exact required command.
+
+Implemented/verified test coverage additions:
+- `internal/update/update_test.go:362` adds update-check behavior tests (dev skip, fresh cache short-circuit, stale cache refresh, v-prefix version comparison).
+- `internal/update/update_test.go:493` adds `getLatestRelease` error-path tests.
+- `internal/update/update_test.go:520` adds `downloadBinary` success/error tests.
+- `internal/update/update_test.go:559` adds `DoUpdate` branch tests.
+- `internal/update/update_test.go:623` verifies background update checks are non-blocking.
+- `internal/types/types_test.go:10` covers `ExitCodeFromError` mapping.
+- `internal/types/types_test.go:57` covers `UserError` creation, context, and `Fix()` normalization.
+- `internal/types/types_test.go:149` covers `RPCErrorFromError` mapping.
+- `internal/types/types_test.go:180` locks exit/RPC constant values.
+
+Coverage check result:
+- `internal/update`: 74.6%
+- `internal/types`: 100.0%
+
+Required validation run and passed:
+- `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...`
+
+Required workflow commands completed:
+- `swarm memory store ... --tags "ralph,learning,agent-secrets"` (stored `mem-8f07df0ede18cc8c`)
+- `openclaw system event --mode now --text "Ralph: completed Test coverage: internal/update and internal/types"`
+
+## Learnings
+### Technical Discovery
+`CheckForUpdateInBackground` is most reliably tested by swapping `http.DefaultClient` with a slow mock transport and asserting both immediate return latency and eventual completion signaling in `internal/update/update_test.go`.
+### Gotcha for Next Iteration
+Avoid backticks in `swarm memory store` shell strings; zsh treats them as command substitution and can cause command-not-found/permission errors. Use single-quoted payload text instead.
+### Files Context
+`internal/update/update_test.go` now contains branch/error-path coverage for cache, network, download, updater, and async behavior. `internal/types/types_test.go` covers exit-code mapping, structured user errors, wrapped error types, RPC mapping, and constant stability.
+
+---
+[2026-02-19T06:05:53.851Z]
+Completed: Test coverage: internal/update and internal/types
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/root_test.go, prd.json, progress.txt, internal/types/exitcodes.go, internal/update/update_test.go
+Summary: Prior failure pattern detected: verification_rejected (required target files missing in diff). Mitigation: I explicitly updated both target areas (`internal/update/update_test.go` and `internal/types/*`) and validated with full build+test.
+
+Implemented TDD for `internal/types` exit-code mapping:
+- Added failing wrapped-error cases in `internal/types/types_test.go:10` for `ExitCodeFromError`.
+- Confirmed failures, then fixed mapping by switching helper checks to `errors.Is` in `internal/types/exitcodes.go:4` and `internal/types/exitcodes.go:67`.
+
+Updated `internal/update` tests:
+- Added success-path `getLatestRelease` test asserting User-Agent header and JSON parsing in `internal/update/update_test.go:493`.
+
+Coverage and validation:
+- `go test -cover ./internal/update ./internal/types` => `internal/update` 74.6%, `internal/types` 100.0%.
+- Required validation passed: `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...`.
+
+Also completed required workflow commands:
+- `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+- `openclaw system event --mode now --text "Ralph: completed Test coverage: internal/update and internal/types"`

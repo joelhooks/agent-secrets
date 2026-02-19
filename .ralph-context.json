@@ -268,6 +268,20 @@
         "internal/daemon/handlers_test.go"
       ],
       "learnings": "Technical Discovery: `internal/daemon/handlers_test.go` can validate CLI remediation behavior indirectly by wrapping handler errors with `output.Error(...)`, while still keeping daemon logic tests isolated. This gives coverage for fix-field expectations (including daemon startup guidance) without changing daemon protocol types.\nGotcha: `handleList()` itself does not return `next_actions`; contextual lease actions are derived from listed secret names at higher layers. Avoid writing brittle tests that expect daemon list results to include command actions unless protocol structs are intentionally extended.\nFiles Context: `internal/daemon/handlers_test.go` now contains the added list/update/delete/error coverage. Existing command-layer next_action/fix behavior remains primarily tested in `cmd/secrets/list_test.go`, `cmd/secrets/delete_test.go`, and `cmd/secrets/update_secret_test.go`."
+    },
+    {
+      "id": "story-mlt172li",
+      "title": "Test coverage: internal/update and internal/types",
+      "status": "failed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/root_test.go",
+        "prd.json",
+        "progress.txt",
+        "internal/update/update_test.go"
+      ],
+      "learnings": "[verification_rejected] ok  \tgithub.com/joelhooks/agent-secrets/cmd/secrets\t(cached)\n?   \tgithub.com/joelhooks/agent-secrets/internal/adapters\t[no test files]\nok  \tgithub.com/joelhooks/agent-secrets/internal/adapters/vercel\t(cached)\nok  \tgithub.com/joelhooks/agent-secrets/internal/audit\t(cached)\nok  \tgithub.com/joelhooks/a"
     }
   ],
   "failures": [
@@ -298,6 +312,32 @@
         "nl -ba"
       ],
       "iterationNumber": 7
+    },
+    {
+      "storyId": "story-mlt172li",
+      "storyTitle": "Test coverage: internal/update and internal/types",
+      "category": "verification_rejected",
+      "error": "[verification_rejected] Required target files not modified: internal/types. Changed files: internal/update/update_test.go",
+      "toolNames": [
+        "/usr/bin/zsh -lc",
+        "sed -n",
+        "nl -ba",
+        "swarm memory"
+      ],
+      "iterationNumber": 4
+    },
+    {
+      "storyId": "story-mlt172li",
+      "storyTitle": "Test coverage: internal/update and internal/types",
+      "category": "verification_rejected",
+      "error": "[verification_rejected] Required target files not modified: internal/types. Changed files: .ralph-context.json, .ralph-iterations.jsonl, internal/update/update_test.go, prd.json, progress.txt",
+      "toolNames": [
+        "/usr/bin/zsh -lc",
+        "sed -n",
+        "swarm memory",
+        "nl -ba"
+      ],
+      "iterationNumber": 5
     }
   ]
 }

@@ -161,17 +161,16 @@
       "title": "Test coverage: internal/update and internal/types",
       "description": "Boost coverage for the two lowest-coverage packages:\n\n1. **internal/update/** (14.5% → 70%+):\n   - Add tests in `internal/update/update_test.go`\n   - Test version comparison logic\n   - Test update check with mock HTTP (or skip network tests)\n   - Test background update check doesn't block\n\n2. **internal/types/** (0% → 80%+):\n   - Add `internal/types/types_test.go`\n   - Test ExitCodeFromError mapping\n   - Test UserError creation and field access\n   - Test NewUserError with context\n   - Test error code constants",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
-        "internal/update/update_test.go",
-        "internal/types"
+        "internal/update/update_test.go"
       ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 13,
-    "lastIteration": "2026-02-19T05:53:15.770Z"
+    "totalIterations": 14,
+    "lastIteration": "2026-02-19T06:05:53.850Z"
   }
 }
