@@ -55,6 +55,29 @@
         "progress.txt"
       ],
       "learnings": "Technical Discovery: `cmd/secrets/lease.go` can safely bypass formatter/output modes for the default path by directly printing `result.Value`; using `--json` keeps the standardized envelope via `output.Success(\"secrets lease\", ...)`. This preserves shell substitution UX while retaining structured responses on demand.\nGotcha: After this flip, any suggested command intended for machine chaining must explicitly include `--json`; otherwise `secrets lease` returns only raw secret text. `internal/output/output.go` action helpers are the key place this can silently regress.\nFiles Context: `cmd/secrets/lease.go` now owns the raw-vs-json branch and lease command docs/flags. `internal/output/output.go` contains reusable action builders (`ActionLease`, `ActionLeaseWithTTL`) used by other commands’ `next_actions`. `cmd/secrets/lease_test.go` provides command-level behavior coverage with a local Unix socket RPC stub. `internal/output/output_test.go` guards action helper command strings."
+    },
+    {
+      "id": "story-mlsr0ekt",
+      "title": "Remove TTY detection and legacy output format flags — JSON always",
+      "status": "completed",
+      "filesModified": [
+        ".ralph-context.json",
+        ".ralph-iterations.jsonl",
+        "cmd/secrets/lease.go",
+        "cmd/secrets/lease_test.go",
+        "internal/output/output.go",
+        "internal/output/output_test.go",
+        "prd.json",
+        "progress.txt",
+        "cmd/secrets/health.go",
+        "cmd/secrets/root.go",
+        "cmd/secrets/scan.go",
+        "internal/output/formatter.go",
+        "internal/output/formatter_test.go",
+        "internal/output/table.go",
+        "internal/update/update.go"
+      ],
+      "learnings": "Technical Discovery: Removing `HumanMode`/`OutputFormat` from `internal/output/output.go` requires scanning outside `internal/output`; `internal/update/update.go` had a hidden dependency (`CheckForUpdateInBackground`) that breaks compilation and JSON-only behavior if left in place.\nGotcha: JSON output escapes `&` as `\\u0026` by default, so tests should decode JSON and assert fields instead of raw substring matching for fix messages or commands.\nFiles Context: `cmd/secrets/root.go` controls global CLI flags and pre-run behavior; `internal/output/formatter.go` is now a JSON-only shim; `internal/output/output.go` is the envelope/printing core; `internal/update/update.go` can inject background stderr noise if not kept JSON-safe; `cmd/secrets/root_test.go` and `internal/output/*_test.go` are the key guardrails for this story."
     }
   ],
   "failures": []

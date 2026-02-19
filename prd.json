@@ -44,7 +44,7 @@
       "title": "Self-documenting root command with command tree",
       "description": "Per cli-design standard: running `secrets` with no args should return a JSON command tree so agents can discover everything in one call.\n\nChanges to `cmd/secrets/root.go`:\n1. Add a `Run` function to `rootCmd` that outputs the command tree as JSON\n2. The output should follow the standard envelope:\n```json\n{\n  \"ok\": true,\n  \"command\": \"secrets\",\n  \"result\": {\n    \"description\": \"Portable credential management for AI agents\",\n    \"version\": \"<version>\",\n    \"commands\": [\n      {\"name\": \"init\", \"description\": \"Initialize the secrets store\", \"usage\": \"secrets init\"},\n      {\"name\": \"add\", \"description\": \"Add a secret to the store\", \"usage\": \"secrets add <name> [--value <val>] [--rotate-via <cmd>]\"},\n      {\"name\": \"lease\", \"description\": \"Get a secret value (raw by default)\", \"usage\": \"secrets lease <name> [--ttl 1h] [--client-id agent-x] [--json]\"},\n      {\"name\": \"revoke\", \"description\": \"Revoke a lease or killswitch\", \"usage\": \"secrets revoke <lease-id> | --all\"},\n      {\"name\": \"status\", \"description\": \"Daemon status and active leases\", \"usage\": \"secrets status\"},\n      {\"name\": \"health\", \"description\": \"Health check\", \"usage\": \"secrets health\"},\n      {\"name\": \"audit\", \"description\": \"View audit log\", \"usage\": \"secrets audit [--tail N]\"},\n      {\"name\": \"scan\", \"description\": \"Scan for hardcoded secrets\", \"usage\": \"secrets scan [path]\"},\n      {\"name\": \"env\", \"description\": \"Generate .env from .secrets.json\", \"usage\": \"secrets env [--force]\"},\n      {\"name\": \"exec\", \"description\": \"Run command with secrets as env vars\", \"usage\": \"secrets exec -- <command>\"},\n      {\"name\": \"cleanup\", \"description\": \"Remove expired lease files\", \"usage\": \"secrets cleanup\"},\n      {\"name\": \"serve\", \"description\": \"Start the daemon\", \"usage\": \"secrets serve\"},\n      {\"name\": \"update\", \"description\": \"Update to latest version\", \"usage\": \"secrets update\"}\n    ]\n  },\n  \"next_actions\": [\n    {\"command\": \"secrets status\", \"description\": \"Check daemon status\"},\n    {\"command\": \"secrets health\", \"description\": \"Full health check\"},\n    {\"command\": \"secrets lease <name>\", \"description\": \"Get a secret value\"}\n  ]\n}\n```\n3. This replaces cobra's default help output when no subcommand is given\n4. Keep `--help` working for detailed cobra help if someone wants it",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "cmd/secrets/root.go"
@@ -88,7 +88,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 3,
-    "lastIteration": "2026-02-19T01:12:25.194Z"
+    "totalIterations": 4,
+    "lastIteration": "2026-02-19T01:15:21.914Z"
   }
 }

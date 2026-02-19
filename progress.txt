@@ -82,3 +82,24 @@ What changed:
   - Updated `cmd/secrets/lease_test.go:86` to remove removed output globals.
 - Cleaned stale command docs referencing removed flags in `cmd/secrets/scan.go:24` and `cmd/secrets/health.go:25`.
 - Removed remaining compile-time dependency on `output.HumanMode` in `internal/update/update.go:332` by making background update checks silent in JSON-only mode.
+
+---
+[2026-02-19T01:15:21.914Z]
+Completed: Self-documenting root command with command tree
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/health.go, cmd/secrets/lease_test.go, cmd/secrets/root.go, cmd/secrets/root_test.go, cmd/secrets/scan.go, internal/output/formatter.go, internal/output/formatter_test.go, internal/output/output.go, internal/output/output_test.go, internal/output/table.go, internal/update/update.go, prd.json, progress.txt
+Summary: Implemented story `story-mlsr0q1z` with TDD.
+- Added a failing test first in `cmd/secrets/root_test.go` (`TestRootCommandNoArgsOutputsCommandTreeJSON`) to assert no-args root output is JSON command-tree envelope with `ok`, `command`, `result.commands`, and `next_actions`.
+- Implemented `rootCmd.Run` in `cmd/secrets/root.go` to emit the self-documenting JSON command tree using the standard envelope via `output.Success("secrets", ...)`.
+- The command tree now includes the required 13 commands and required usage/description strings, plus required `next_actions`.
+- Kept Cobra `--help` behavior intact by only overriding the no-subcommand execution path.
+- Ran required post-work steps:
+  - `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+  - `openclaw system event --mode now --text "Ralph: completed Self-documenting root command with command tree"`
+
+## Learnings
+### Technical Discovery
+In this codebase, root no-args discovery output is best implemented by adding `Run` on `rootCmd` and calling `output.Print(output.Success(...))`, which preserves the project’s JSON envelope and HATEOAS action pattern.
+### Gotcha for Next Iteration
+Tests that execute root commands should set `noUpdateCheck = true`; otherwise `PersistentPreRunE` may run background update checks and make stdout assertions brittle.
+### Files Context
+`cmd/secrets/root.go` controls root command behavior and persistent pre-run hooks; `cmd/secrets/root_test.go` now contains no-args JSON contract coverage and stdout-capture helpers for root execution tests.
