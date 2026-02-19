@@ -10,12 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var updateCmd = &cobra.Command{
-	Use:   "update",
+var selfUpdateCmd = &cobra.Command{
+	Use:   "self-update",
 	Short: "Update to the latest version",
 	Long:  `Check for and install the latest version of agent-secrets from GitHub releases.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		const commandName = "secrets update"
+		const commandName = "secrets self-update"
 		currentVersion := update.GetVersion()
 
 		// Check for update first

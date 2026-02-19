@@ -352,7 +352,7 @@ func ActionAuditTail(n int) Action {
 func ActionUpdate() Action {
 	return Action{
 		Description: "Update to the latest version",
-		Command:     "secrets update",
+		Command:     "secrets self-update",
 	}
 }
 

@@ -85,11 +85,23 @@
         "README.md",
         "skills/secret-management/SKILL.md"
       ]
+    },
+    {
+      "id": "story-mlsuuq2i",
+      "title": "Add update and delete commands for secrets",
+      "description": "Add two new commands to manage existing secrets:\n\n**`secrets update <name>`** — Replace the value of an existing secret.\n- Same input methods as `add`: --value flag, stdin pipe, or interactive prompt\n- Fails if secret doesn't exist (use `add` for new secrets)\n- Returns JSON envelope with next_actions\n- Add RPC method `secrets.update` in `internal/daemon/handlers.go` and `internal/daemon/protocol.go`\n- Handler: call `store.Add()` (which overwrites) but only if secret already exists — check first\n\n**`secrets delete <name>`** — Remove a secret from the store.\n- Requires the secret name as argument\n- Add `--force` flag to skip confirmation (for agent use, default behavior)\n- Revokes any active leases for this secret before deleting\n- Returns JSON envelope confirming deletion with next_actions\n- Add RPC method `secrets.delete` in `internal/daemon/handlers.go` and `internal/daemon/protocol.go`\n- Handler: revoke leases for this secret, then call `store.Remove()` or equivalent\n\nBoth commands:\n1. Create `cmd/secrets/update_secret.go` and `cmd/secrets/delete.go`\n2. Register in `cmd/secrets/root.go`\n3. Update the root command tree (the self-documenting JSON) to include both\n4. Include proper `fix` fields on errors\n5. Return contextual `next_actions`\n\nAlso add `secrets delete` alias `secrets rm` for convenience.",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/root.go",
+        "internal/daemon/handlers.go"
+      ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 7,
-    "lastIteration": "2026-02-19T01:39:14.798Z"
+    "totalIterations": 8,
+    "lastIteration": "2026-02-19T02:50:26.405Z"
   }
 }

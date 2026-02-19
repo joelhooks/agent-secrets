@@ -159,6 +159,74 @@ func TestHandleDelete(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteRevokesActiveLeasesForSecret(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	if err := handler.store.Add("test-secret", "test-value", ""); err != nil {
+		t.Fatalf("failed to add secret: %v", err)
+	}
+
+	if _, err := handler.leaseManager.Acquire("test-secret", "test-client", time.Hour); err != nil {
+		t.Fatalf("failed to acquire lease: %v", err)
+	}
+
+	result, err := handler.handleDelete(DeleteParams{Name: "test-secret"})
+	if err != nil {
+		t.Fatalf("handleDelete failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatalf("expected delete success, got: %s", result.Message)
+	}
+
+	if active := handler.leaseManager.List(); len(active) != 0 {
+		t.Fatalf("expected 0 active leases after delete, got %d", len(active))
+	}
+}
+
+func TestHandleUpdate(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	if err := handler.store.Add("test-secret", "old-value", ""); err != nil {
+		t.Fatalf("failed to add secret: %v", err)
+	}
+
+	result, err := handler.handleUpdate(UpdateParams{
+		Name:  "test-secret",
+		Value: "new-value",
+	})
+	if err != nil {
+		t.Fatalf("handleUpdate failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatalf("expected update success, got: %s", result.Message)
+	}
+
+	value, err := handler.store.Get("test-secret")
+	if err != nil {
+		t.Fatalf("failed to read secret after update: %v", err)
+	}
+	if value != "new-value" {
+		t.Fatalf("expected updated value new-value, got %q", value)
+	}
+}
+
+func TestHandleUpdateMissingSecret(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	_, err := handler.handleUpdate(UpdateParams{
+		Name:  "missing-secret",
+		Value: "value",
+	})
+	if err == nil {
+		t.Fatalf("expected error for missing secret")
+	}
+}
+
 func TestHandleList(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
@@ -428,6 +496,11 @@ func TestHandleRequest(t *testing.T) {
 			params: AddParams{Name: "test", Value: "value"},
 		},
 		{
+			name:   "update method",
+			method: MethodUpdate,
+			params: UpdateParams{Name: "test", Value: "updated"},
+		},
+		{
 			name:      "get method (not allowed)",
 			method:    MethodGet,
 			params:    GetParams{Name: "test"},
@@ -515,12 +588,14 @@ func TestJSONSerialization(t *testing.T) {
 	// Test that all param/result types serialize correctly
 	tests := []interface{}{
 		AddParams{Name: "test", Value: "val", RotateVia: "cmd"},
+		UpdateParams{Name: "test", Value: "next"},
 		DeleteParams{Name: "test"},
 		LeaseParams{SecretName: "test", ClientID: "client", TTL: "1h"},
 		RevokeParams{LeaseID: "id"},
 		RotateParams{SecretName: "test"},
 		AuditParams{Tail: 10},
 		AddResult{Success: true, Message: "ok"},
+		UpdateResult{Success: true, Message: "ok"},
 		LeaseResult{LeaseID: "id", Value: "val", ExpiresAt: time.Now()},
 	}
 

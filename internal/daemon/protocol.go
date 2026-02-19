@@ -7,6 +7,7 @@ import "time"
 const (
 	MethodInit      = "secrets.init"
 	MethodAdd       = "secrets.add"
+	MethodUpdate    = "secrets.update"
 	MethodGet       = "secrets.get"
 	MethodDelete    = "secrets.delete"
 	MethodList      = "secrets.list"
@@ -39,6 +40,20 @@ type AddParams struct {
 
 // AddResult is the result of secrets.add
 type AddResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// UpdateParams are parameters for secrets.update
+type UpdateParams struct {
+	Name         string `json:"name"`
+	Value        string `json:"value"`
+	RotateVia    string `json:"rotate_via,omitempty"`
+	RotateViaSet bool   `json:"rotate_via_set,omitempty"`
+}
+
+// UpdateResult is the result of secrets.update
+type UpdateResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }

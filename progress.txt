@@ -245,3 +245,43 @@ Validation executed and passed:
 Required post-steps executed:
 - Stored learning with `swarm memory store ... --tags "ralph,learning,agent-secrets"`
 - Sent event with `openclaw system event --mode now --text "Ralph: completed Update README, SKILL.md, and AGENTS.md for new CLI design"`
+
+---
+[2026-02-19T02:50:26.406Z]
+Completed: Add update and delete commands for secrets
+Files: .ralph-context.json, .ralph-iterations.jsonl, cmd/secrets/exec.go, cmd/secrets/status.go, internal/daemon/handlers_test.go, cmd/secrets/root.go, cmd/secrets/root_test.go, cmd/secrets/update.go, internal/daemon/handlers.go, internal/daemon/protocol.go, internal/output/output.go, internal/update/update.go, prd.json
+Summary: Implemented `story-mlsuuq2i` end-to-end with TDD (failing tests first), and explicitly modified required targets `cmd/secrets/root.go` and `internal/daemon/handlers.go`.
+
+What changed:
+- Added secret update RPC and handler:
+  - `internal/daemon/protocol.go`: added `MethodUpdate` (`secrets.update`), `UpdateParams`, `UpdateResult`.
+  - `internal/daemon/handlers.go`: added `MethodUpdate` dispatch and `handleUpdate(...)` with existence check before update.
+- Added CLI commands:
+  - `cmd/secrets/update_secret.go`: new `secrets update <name>` command with `--value`, stdin, or interactive prompt; supports optional `--rotate-via`; returns JSON envelope + contextual `next_actions`; adds explicit add-first `fix` on not-found.
+  - `cmd/secrets/delete.go`: new `secrets delete <name>` with alias `secrets rm`; `--force` added (default true for agent workflows); JSON envelope + contextual `next_actions`.
+- Registered commands and root docs:
+  - `cmd/secrets/root.go`: command tree now includes `update` and `delete`, registers both commands, and keeps binary updater as `self-update` to avoid name collision.
+- Updated self-update references:
+  - `cmd/secrets/update.go`: renamed updater command to `self-update`.
+  - `internal/output/output.go` and `internal/update/update.go`: update action/hints now point to `secrets self-update`.
+- Tests added/updated:
+  - `internal/daemon/handlers_test.go`: new update tests, delete lease-revocation test, update method coverage in request/serialization tests.
+  - `cmd/secrets/root_test.go`: now asserts root tree includes `update` and `delete`.
+  - New CLI tests: `cmd/secrets/update_secret_test.go`, `cmd/secrets/delete_test.go`.
+
+Validation run (required command):
+- `cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...` passed.
+
+Required post-steps run:
+- `swarm memory store ... --tags "ralph,learning,agent-secrets"`
+- `openclaw system event --mode now --text "Ralph: completed Add update and delete commands for secrets"`
+
+Prior failure pattern detected: `verification_rejected`. Mitigation applied: ensured required files stayed in diff (`cmd/secrets/root.go`, `internal/daemon/handlers.go`) and verified after validation.
+
+## Learnings
+### Technical Discovery
+`store.Add` in this codebase does not overwrite existing secrets; update semantics must use `store.Update` after an explicit existence check. Implementing `secrets.update` in `internal/daemon/handlers.go` with `store.Get` + `store.Update` preserves the “update-only” contract.
+### Gotcha for Next Iteration
+There is a command-name collision risk around `secrets update`: secret-update now owns that name, so binary update was moved to `secrets self-update`. Future command-tree or update-hint changes must keep `cmd/secrets/root.go`, `cmd/secrets/update.go`, `internal/output/output.go`, and `internal/update/update.go` consistent.
+### Files Context
+`cmd/secrets/update_secret.go` and `cmd/secrets/delete.go` are the new agent-facing secret mutation commands. `internal/daemon/protocol.go` defines the wire types/method names, and `internal/daemon/handlers.go` enforces update/delete behavior. `cmd/secrets/root.go` controls registration and self-documenting command output. Tests are primarily in `internal/daemon/handlers_test.go`, `cmd/secrets/update_secret_test.go`, `cmd/secrets/delete_test.go`, and `cmd/secrets/root_test.go`.

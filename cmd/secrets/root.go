@@ -41,6 +41,8 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 				{Name: "init", Description: "Initialize the secrets store", Usage: "secrets init"},
 				{Name: "add", Description: "Add a secret to the store", Usage: "secrets add <name> [--value <val>] [--rotate-via <cmd>]"},
 				{Name: "list", Description: "List stored secret names", Usage: "secrets list"},
+				{Name: "update", Description: "Update an existing secret value", Usage: "secrets update <name> [--value <val>] [--rotate-via <cmd>]"},
+				{Name: "delete", Description: "Delete a secret from the store", Usage: "secrets delete <name> [--force] (alias: secrets rm <name>)"},
 				{Name: "lease", Description: "Get a secret value (raw by default)", Usage: "secrets lease <name> [--ttl 1h] [--client-id agent-x] [--json]"},
 				{Name: "revoke", Description: "Revoke a lease or killswitch", Usage: "secrets revoke <lease-id> | --all"},
 				{Name: "status", Description: "Daemon status and active leases", Usage: "secrets status"},
@@ -51,7 +53,7 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 				{Name: "exec", Description: "Run command with secrets as env vars", Usage: "secrets exec -- <command>"},
 				{Name: "cleanup", Description: "Remove expired lease files", Usage: "secrets cleanup"},
 				{Name: "serve", Description: "Start the daemon", Usage: "secrets serve"},
-				{Name: "update", Description: "Update to latest version", Usage: "secrets update"},
+				{Name: "self-update", Description: "Update to latest version", Usage: "secrets self-update"},
 			},
 		}
 
@@ -64,8 +66,8 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 		))
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip update check if disabled or if running the update command itself
-		if noUpdateCheck || cmd.Name() == "update" {
+		// Skip update check if disabled or if running the self-update command itself
+		if noUpdateCheck || cmd.Name() == "self-update" {
 			return nil
 		}
 
@@ -86,6 +88,8 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(leaseCmd)
 	rootCmd.AddCommand(revokeCmd)
 	rootCmd.AddCommand(auditCmd)
@@ -96,7 +100,7 @@ func init() {
 	rootCmd.AddCommand(envCmd)
 	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(selfUpdateCmd)
 }
 
 func Execute() {

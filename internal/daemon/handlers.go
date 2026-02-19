@@ -57,6 +57,13 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 		} else {
 			resp.Result = result
 		}
+	case MethodUpdate:
+		result, err := h.handleUpdate(req.Params)
+		if err != nil {
+			resp.Error = types.RPCErrorFromError(err)
+		} else {
+			resp.Result = result
+		}
 	case MethodGet:
 		// Direct get is not allowed - must use lease
 		resp.Error = &types.RPCError{
@@ -172,6 +179,40 @@ func (h *Handler) handleAdd(params interface{}) (*AddResult, error) {
 	return &AddResult{
 		Success: true,
 		Message: fmt.Sprintf("secret %q added successfully", p.Name),
+	}, nil
+}
+
+// handleUpdate replaces the value of an existing secret.
+func (h *Handler) handleUpdate(params interface{}) (*UpdateResult, error) {
+	var p UpdateParams
+	if err := unmarshalParams(params, &p); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	if p.Name == "" {
+		return nil, fmt.Errorf("secret name is required")
+	}
+	if p.Value == "" {
+		return nil, fmt.Errorf("secret value is required")
+	}
+
+	// Update is only for existing secrets; adding a new one should use secrets.add.
+	if _, err := h.store.Get(p.Name); err != nil {
+		return nil, err
+	}
+
+	var rotateVia *string
+	if p.RotateViaSet {
+		rotateVia = &p.RotateVia
+	}
+
+	if err := h.store.Update(p.Name, p.Value, rotateVia); err != nil {
+		return nil, err
+	}
+
+	return &UpdateResult{
+		Success: true,
+		Message: fmt.Sprintf("secret %q updated successfully", p.Name),
 	}, nil
 }
 

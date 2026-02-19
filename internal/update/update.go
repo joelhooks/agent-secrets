@@ -136,7 +136,7 @@ func CheckForUpdate(currentVersion string) (*output.UpdateInfo, error) {
 				Available:      cache.UpdateAvailable,
 				CurrentVersion: currentVersion,
 				LatestVersion:  cache.LatestVersion,
-				Command:        "secrets update",
+				Command:        "secrets self-update",
 			}, nil
 		}
 	}
@@ -171,7 +171,7 @@ func CheckForUpdate(currentVersion string) (*output.UpdateInfo, error) {
 			Available:      true,
 			CurrentVersion: currentVersion,
 			LatestVersion:  latest.TagName,
-			Command:        "secrets update",
+			Command:        "secrets self-update",
 		}, nil
 	}
 
