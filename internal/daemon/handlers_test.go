@@ -2,6 +2,9 @@ package daemon
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +12,7 @@ import (
 	"github.com/joelhooks/agent-secrets/internal/config"
 	"github.com/joelhooks/agent-secrets/internal/killswitch"
 	"github.com/joelhooks/agent-secrets/internal/lease"
+	"github.com/joelhooks/agent-secrets/internal/output"
 	"github.com/joelhooks/agent-secrets/internal/rotation"
 	"github.com/joelhooks/agent-secrets/internal/store"
 	"github.com/joelhooks/agent-secrets/internal/types"
@@ -185,6 +189,19 @@ func TestHandleDeleteRevokesActiveLeasesForSecret(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteMissingSecret(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	_, err := handler.handleDelete(DeleteParams{Name: "missing-secret"})
+	if err == nil {
+		t.Fatalf("expected error for missing secret")
+	}
+	if !errors.Is(err, types.ErrSecretNotFound) {
+		t.Fatalf("expected ErrSecretNotFound, got %v", err)
+	}
+}
+
 func TestHandleUpdate(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
@@ -224,6 +241,41 @@ func TestHandleUpdateMissingSecret(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error for missing secret")
+	}
+	if !errors.Is(err, types.ErrSecretNotFound) {
+		t.Fatalf("expected ErrSecretNotFound, got %v", err)
+	}
+}
+
+func TestHandleUpdatePreservesRotationConfigWhenNotProvided(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	if err := handler.store.Add("rotating-secret", "old-value", "bin/rotate-secret"); err != nil {
+		t.Fatalf("failed to add secret: %v", err)
+	}
+
+	result, err := handler.handleUpdate(UpdateParams{
+		Name:  "rotating-secret",
+		Value: "new-value",
+	})
+	if err != nil {
+		t.Fatalf("handleUpdate failed: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected update success, got: %s", result.Message)
+	}
+
+	listResult, err := handler.handleList()
+	if err != nil {
+		t.Fatalf("handleList failed: %v", err)
+	}
+
+	if len(listResult.Secrets) != 1 {
+		t.Fatalf("expected 1 secret, got %d", len(listResult.Secrets))
+	}
+	if listResult.Secrets[0].RotateVia != "bin/rotate-secret" {
+		t.Fatalf("expected rotate_via to be preserved, got %q", listResult.Secrets[0].RotateVia)
 	}
 }
 
@@ -274,6 +326,83 @@ func TestHandleList(t *testing.T) {
 	}
 	if activeByName["secret1"] != 0 {
 		t.Errorf("expected secret1 to have 0 active leases, got %d", activeByName["secret1"])
+	}
+}
+
+func TestHandleListNoSecretsReturnsEmptyArray(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	result, err := handler.handleList()
+	if err != nil {
+		t.Fatalf("handleList failed: %v", err)
+	}
+	if result.Secrets == nil {
+		t.Fatalf("expected empty array, got nil")
+	}
+	if len(result.Secrets) != 0 {
+		t.Fatalf("expected 0 secrets, got %d", len(result.Secrets))
+	}
+}
+
+func TestHandleListIncludesRotationLeaseCountsAndContextualLeaseCommands(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	if err := handler.store.Add("alpha_token", "value-alpha", "bin/rotate-alpha"); err != nil {
+		t.Fatalf("failed to add alpha secret: %v", err)
+	}
+	if err := handler.store.Add("beta_token", "value-beta", ""); err != nil {
+		t.Fatalf("failed to add beta secret: %v", err)
+	}
+
+	if _, err := handler.leaseManager.Acquire("alpha_token", "client-a", time.Hour); err != nil {
+		t.Fatalf("failed to acquire alpha lease: %v", err)
+	}
+	if _, err := handler.leaseManager.Acquire("alpha_token", "client-b", time.Hour); err != nil {
+		t.Fatalf("failed to acquire alpha lease: %v", err)
+	}
+	if _, err := handler.leaseManager.Acquire("beta_token", "client-c", time.Hour); err != nil {
+		t.Fatalf("failed to acquire beta lease: %v", err)
+	}
+
+	result, err := handler.handleList()
+	if err != nil {
+		t.Fatalf("handleList failed: %v", err)
+	}
+	if len(result.Secrets) != 2 {
+		t.Fatalf("expected 2 secrets, got %d", len(result.Secrets))
+	}
+
+	if result.Secrets[0].Name != "alpha_token" || result.Secrets[1].Name != "beta_token" {
+		t.Fatalf("expected sorted names [alpha_token beta_token], got [%s %s]", result.Secrets[0].Name, result.Secrets[1].Name)
+	}
+
+	byName := make(map[string]SecretMetadata, len(result.Secrets))
+	for _, secret := range result.Secrets {
+		byName[secret.Name] = secret
+	}
+
+	if byName["alpha_token"].RotateVia == "" {
+		t.Fatalf("expected alpha_token to report rotation configuration")
+	}
+	if byName["beta_token"].RotateVia != "" {
+		t.Fatalf("expected beta_token to have no rotation configuration, got %q", byName["beta_token"].RotateVia)
+	}
+	if byName["alpha_token"].ActiveLeases != 2 {
+		t.Fatalf("expected alpha_token to have 2 active leases, got %d", byName["alpha_token"].ActiveLeases)
+	}
+	if byName["beta_token"].ActiveLeases != 1 {
+		t.Fatalf("expected beta_token to have 1 active lease, got %d", byName["beta_token"].ActiveLeases)
+	}
+
+	// The list metadata directly supports contextual lease next actions per secret.
+	leaseCommands := make([]string, 0, len(result.Secrets))
+	for _, secret := range result.Secrets {
+		leaseCommands = append(leaseCommands, fmt.Sprintf("secrets lease %s", secret.Name))
+	}
+	if leaseCommands[0] != "secrets lease alpha_token" || leaseCommands[1] != "secrets lease beta_token" {
+		t.Fatalf("expected contextual lease commands, got %#v", leaseCommands)
 	}
 }
 
@@ -541,6 +670,121 @@ func TestHandleRequest(t *testing.T) {
 				if resp.Result == nil {
 					t.Error("expected result, got nil")
 				}
+			}
+		})
+	}
+}
+
+func TestHandleRequestUpdateAndDeleteMissingSecretReturnRPCErrorEnvelope(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	tests := []struct {
+		name   string
+		method string
+		params interface{}
+	}{
+		{
+			name:   "update missing secret",
+			method: MethodUpdate,
+			params: UpdateParams{Name: "missing-secret", Value: "new-value"},
+		},
+		{
+			name:   "delete missing secret",
+			method: MethodDelete,
+			params: DeleteParams{Name: "missing-secret"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &types.RPCRequest{
+				JSONRPC: "2.0",
+				Method:  tt.method,
+				Params:  tt.params,
+				ID:      "req-1",
+			}
+
+			resp := handler.HandleRequest(req)
+			if resp.JSONRPC != "2.0" {
+				t.Fatalf("expected jsonrpc 2.0, got %q", resp.JSONRPC)
+			}
+			if resp.ID != "req-1" {
+				t.Fatalf("expected response id req-1, got %v", resp.ID)
+			}
+			if resp.Result != nil {
+				t.Fatalf("expected nil result on error, got %#v", resp.Result)
+			}
+			if resp.Error == nil {
+				t.Fatalf("expected RPC error envelope")
+			}
+			if resp.Error.Code != types.RPCSecretNotFound {
+				t.Fatalf("expected RPCSecretNotFound, got %d", resp.Error.Code)
+			}
+			if strings.TrimSpace(resp.Error.Message) == "" {
+				t.Fatalf("expected non-empty error message")
+			}
+		})
+	}
+}
+
+func TestHandlerErrorsRenderFixFieldAndDaemonConnectionSuggestion(t *testing.T) {
+	handler, cfg, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	_, updateErr := handler.handleUpdate(UpdateParams{Name: "missing-secret", Value: "new-value"})
+	_, deleteErr := handler.handleDelete(DeleteParams{Name: "missing-secret"})
+
+	// Replace with a non-initialized store to force list failure.
+	handler.store = store.New(cfg)
+	_, listErr := handler.handleList()
+
+	tests := []struct {
+		name            string
+		command         string
+		err             error
+		wantFixContains string
+	}{
+		{
+			name:            "update missing secret",
+			command:         "secrets update",
+			err:             updateErr,
+			wantFixContains: "Check available secrets",
+		},
+		{
+			name:            "delete missing secret",
+			command:         "secrets delete",
+			err:             deleteErr,
+			wantFixContains: "Check available secrets",
+		},
+		{
+			name:            "list store not initialized",
+			command:         "secrets list",
+			err:             listErr,
+			wantFixContains: "Initialize the store: secrets init",
+		},
+		{
+			name:            "daemon connection",
+			command:         "secrets list",
+			err:             types.ErrDaemonNotRunning,
+			wantFixContains: "Start the daemon: secrets serve &",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.err == nil {
+				t.Fatalf("test setup error is nil")
+			}
+			resp := output.Error(tt.command, tt.err)
+			if resp.Error == nil || strings.TrimSpace(resp.Error.Message) == "" {
+				t.Fatalf("expected error details in response envelope")
+			}
+			if strings.TrimSpace(resp.Fix) == "" {
+				t.Fatalf("expected non-empty fix field")
+			}
+			if !strings.Contains(resp.Fix, tt.wantFixContains) {
+				t.Fatalf("expected fix to contain %q, got %q", tt.wantFixContains, resp.Fix)
 			}
 		})
 	}

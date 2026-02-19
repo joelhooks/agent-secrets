@@ -139,7 +139,7 @@
       "title": "Test coverage: daemon handlers (list, update, delete)",
       "description": "Add tests for the new daemon RPC handlers in `internal/daemon/handlers_test.go`:\n\n1. **List handler tests:**\n   - List with no secrets returns empty array\n   - List with secrets returns names, rotation status, lease counts\n   - List response includes contextual next_actions with lease commands per secret\n\n2. **Update handler tests (if update RPC exists):**\n   - Update existing secret succeeds\n   - Update non-existent secret fails with appropriate error\n   - Update preserves rotation config\n\n3. **Delete handler tests (if delete RPC exists):**\n   - Delete existing secret succeeds\n   - Delete non-existent secret fails\n   - Delete revokes active leases for that secret\n   - Delete response includes appropriate next_actions\n\n4. **Error response tests:**\n   - All handlers return proper error envelope with fix field\n   - Daemon connection errors suggest \"secrets serve &\"",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
       "targetFiles": [
         "internal/daemon/handlers_test.go"
@@ -171,7 +171,7 @@
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 11,
-    "lastIteration": "2026-02-19T05:43:55.594Z"
+    "totalIterations": 12,
+    "lastIteration": "2026-02-19T05:49:22.855Z"
   }
 }

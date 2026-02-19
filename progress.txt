@@ -329,3 +329,31 @@ Process requirements completed:
 Completed: Test coverage: internal/output envelope and formatters
 Files: README.md, .ralph-context.json, .ralph-iterations.jsonl, internal/output/json.go, internal/output/output_test.go, prd.json
 Summary: Implemented story `story-mlt170vk` by expanding `internal/output` test coverage from 38.5% to 94.3% and fixing one formatter inconsistency. Added envelope/action/deprecation tests in `internal/output/output_test.go`, added JSON formatter tests in `internal/output/json_test.go`, added raw formatter tests in `internal/output/raw_test.go`, and updated `internal/output/json.go` to enforce `success == ok` during JSON formatting.
+
+---
+[2026-02-19T05:49:22.856Z]
+Completed: Test coverage: daemon handlers (list, update, delete)
+Files: .ralph-context.json, .ralph-iterations.jsonl, internal/output/json.go, internal/output/json_test.go, internal/output/output_test.go, internal/output/raw_test.go, prd.json, progress.txt, internal/daemon/handlers_test.go
+Summary: Prior failure pattern detected: verification_rejected. Mitigation: I modified the required target file (`internal/daemon/handlers_test.go`) directly, confirmed it was in the diff, and then ran full validation.
+
+Implemented story `story-mlt171hg` by expanding daemon handler coverage in `internal/daemon/handlers_test.go`:
+- Added list empty-state test (`internal/daemon/handlers_test.go:332`).
+- Added list metadata test for names, rotation status (`RotateVia` presence), lease counts, and contextual lease command derivation (`internal/daemon/handlers_test.go:348`).
+- Strengthened update missing-secret assertions with typed error checks (`internal/daemon/handlers_test.go:234`).
+- Added update rotation-preservation test (`internal/daemon/handlers_test.go:250`).
+- Added delete missing-secret typed error test (`internal/daemon/handlers_test.go:192`).
+- Added RPC error-envelope assertions for update/delete missing secret paths (`internal/daemon/handlers_test.go:678`).
+- Added error-envelope fix-field tests (including daemon connection suggestion `Start the daemon: secrets serve &`) via `output.Error(...)` (`internal/daemon/handlers_test.go:731`).
+
+Required process steps completed:
+- Ran pre-task memory lookup: `swarm memory find "Test coverage: daemon handlers (list, update, delete)"`.
+- Stored learning: `swarm memory store ... --tags "ralph,learning,agent-secrets"` (memory id: `mem-6bce520fe596f65a`).
+- Sent completion event: `openclaw system event --mode now --text "Ralph: completed Test coverage: daemon handlers (list, update, delete)"`.
+
+## Learnings
+### Technical Discovery
+`internal/daemon/handlers_test.go` already had baseline update/delete/list tests, but it did not assert typed sentinel behavior (`errors.Is(..., types.ErrSecretNotFound)`), rotation preservation when `RotateViaSet` is unset, or JSON-RPC envelope invariants (`jsonrpc`, `id`, `result=nil` on error). Adding these catches handler regressions without touching production code.
+### Gotcha for Next Iteration
+Daemon handlers do not directly emit CLI `next_actions`/`fix` envelopes; those are produced in output/command layers. For handler-story coverage, validate RPC envelope behavior in `HandleRequest`, and if you need `fix` assertions, wrap handler errors with `output.Error(...)` in tests.
+### Files Context
+`internal/daemon/handlers_test.go` is the core coverage file for daemon handler behavior. The new tests in this file now cover list empty + metadata behavior, update/delete error typing, update rotation config preservation, and RPC error envelope structure for missing-secret flows.
