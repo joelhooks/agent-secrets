@@ -16,6 +16,7 @@ var (
 	leaseTTL      string
 	leaseClientID string
 	leaseJSON     bool
+	leaseRaw      bool
 )
 
 var leaseCmd = &cobra.Command{
@@ -35,6 +36,10 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		const commandName = "secrets lease"
+
+		if cmd.Flags().Lookup("raw") != nil && cmd.Flags().Changed("raw") {
+			output.DeprecationWarning("WARNING: --raw is deprecated and now the default. Remove from scripts. Will be removed in v0.6.0")
+		}
 
 		// Default client ID to hostname
 		if leaseClientID == "" {
@@ -129,4 +134,8 @@ func init() {
 	leaseCmd.Flags().StringVar(&leaseTTL, "ttl", "1h", "Time-to-live for the lease (e.g., 1h, 30m, 2h30m)")
 	leaseCmd.Flags().StringVar(&leaseClientID, "client-id", "", "Client identifier (defaults to hostname)")
 	leaseCmd.Flags().BoolVar(&leaseJSON, "json", false, "Output full JSON envelope with lease metadata and next actions")
+	leaseCmd.Flags().BoolVar(&leaseRaw, "raw", false, "[deprecated] No-op: raw output is now the default")
+	if err := leaseCmd.Flags().MarkHidden("raw"); err != nil {
+		panic(err)
+	}
 }

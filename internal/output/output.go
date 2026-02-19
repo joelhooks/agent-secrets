@@ -27,6 +27,7 @@ type ErrorDetail struct {
 // Response is the standard CLI response format.
 type Response struct {
 	OK          bool         `json:"ok"`
+	Success     bool         `json:"success"`
 	Command     string       `json:"command"`
 	Result      interface{}  `json:"result,omitempty"`
 	Error       *ErrorDetail `json:"error,omitempty"`
@@ -62,6 +63,7 @@ func Print(r Response) {
 func Success(command string, result interface{}, actions ...Action) Response {
 	return Response{
 		OK:          true,
+		Success:     true,
 		Command:     command,
 		Result:      result,
 		NextActions: actions,
@@ -76,6 +78,7 @@ func Error(command string, err error, actions ...Action) Response {
 
 	return Response{
 		OK:          false,
+		Success:     false,
 		Command:     command,
 		Error:       errorDetail,
 		Fix:         fix,
@@ -90,6 +93,7 @@ func ErrorMsg(command, msg string, actions ...Action) Response {
 	fix := inferFix(nil, msg, defaultFix)
 	return Response{
 		OK:      false,
+		Success: false,
 		Command: command,
 		Error: &ErrorDetail{
 			Message: msg,
@@ -107,6 +111,7 @@ func ErrorWithCode(command string, err error, exitCode int, actions ...Action) R
 
 	return Response{
 		OK:          false,
+		Success:     false,
 		Command:     command,
 		Error:       errorDetail,
 		Fix:         fix,
@@ -120,6 +125,7 @@ func ErrorMsgWithCode(command, msg string, exitCode int, actions ...Action) Resp
 	fix := inferFix(nil, msg, defaultFix)
 	return Response{
 		OK:      false,
+		Success: false,
 		Command: command,
 		Error: &ErrorDetail{
 			Message: msg,
@@ -151,9 +157,19 @@ func FatalMsg(command, msg string, actions ...Action) {
 }
 
 func printJSON(r Response) error {
+	r.Success = r.OK
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(r)
+}
+
+// DeprecationWarning writes a deprecation warning to stderr.
+func DeprecationWarning(msg string) {
+	warning := strings.TrimSpace(msg)
+	if warning == "" {
+		return
+	}
+	fmt.Fprintln(os.Stderr, warning)
 }
 
 const defaultFix = "Review the error details and run `secrets --help` for usage."

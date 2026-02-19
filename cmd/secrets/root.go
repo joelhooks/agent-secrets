@@ -14,6 +14,8 @@ var (
 	noUpdateCheck       bool
 	timeoutSeconds      int
 	skipPermissionCheck bool
+	rootHumanMode       bool
+	rootOutputFormat    string
 )
 
 var rootCmd = &cobra.Command{
@@ -66,6 +68,8 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 		))
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		emitDeprecatedRootFlagWarnings(cmd)
+
 		// Skip update check if disabled or if running the self-update command itself
 		if noUpdateCheck || cmd.Name() == "self-update" {
 			return nil
@@ -83,6 +87,14 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noUpdateCheck, "no-update-check", false, "Disable automatic update check (useful for CI)")
 	rootCmd.PersistentFlags().IntVar(&timeoutSeconds, "timeout", 5, "Timeout in seconds for daemon socket operations")
 	rootCmd.PersistentFlags().BoolVar(&skipPermissionCheck, "skip-permission-check", false, "Skip file permission validation (for edge cases)")
+	rootCmd.PersistentFlags().BoolVar(&rootHumanMode, "human", false, "[deprecated] No-op: JSON output is always enabled")
+	rootCmd.PersistentFlags().StringVar(&rootOutputFormat, "output", "", "[deprecated] No-op: JSON output is always enabled")
+	if err := rootCmd.PersistentFlags().MarkHidden("human"); err != nil {
+		panic(err)
+	}
+	if err := rootCmd.PersistentFlags().MarkHidden("output"); err != nil {
+		panic(err)
+	}
 
 	// Add all subcommands
 	rootCmd.AddCommand(initCmd)
@@ -106,5 +118,14 @@ func init() {
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
+	}
+}
+
+func emitDeprecatedRootFlagWarnings(cmd *cobra.Command) {
+	if cmd.Flags().Lookup("human") != nil && cmd.Flags().Changed("human") {
+		output.DeprecationWarning("WARNING: --human is deprecated and ignored. JSON output is always enabled. Will be removed in v0.6.0")
+	}
+	if cmd.Flags().Lookup("output") != nil && cmd.Flags().Changed("output") {
+		output.DeprecationWarning("WARNING: --output is deprecated and ignored. JSON output is always enabled. Will be removed in v0.6.0")
 	}
 }

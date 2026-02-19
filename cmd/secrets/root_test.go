@@ -4,16 +4,25 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
 func TestRootCommandDoesNotExposeLegacyOutputFlags(t *testing.T) {
-	if rootCmd.PersistentFlags().Lookup("human") != nil {
-		t.Fatalf("expected --human flag to be removed")
+	humanFlag := rootCmd.PersistentFlags().Lookup("human")
+	if humanFlag == nil {
+		t.Fatalf("expected --human flag to exist for backward compatibility")
+	}
+	if !humanFlag.Hidden {
+		t.Fatalf("expected --human flag to be hidden")
 	}
 
-	if rootCmd.PersistentFlags().Lookup("output") != nil {
-		t.Fatalf("expected --output flag to be removed")
+	outputFlag := rootCmd.PersistentFlags().Lookup("output")
+	if outputFlag == nil {
+		t.Fatalf("expected --output flag to exist for backward compatibility")
+	}
+	if !outputFlag.Hidden {
+		t.Fatalf("expected --output flag to be hidden")
 	}
 }
 
@@ -99,6 +108,40 @@ func TestRootCommandNoArgsOutputsCommandTreeJSON(t *testing.T) {
 	}
 }
 
+func TestRootCommandLegacyFlagsWarnOnStderr(t *testing.T) {
+	restore := setRootTestGlobals()
+	defer restore()
+
+	var out string
+	errOut := captureRootStderr(t, func() {
+		out = captureRootStdout(t, func() {
+			rootCmd.SetArgs([]string{"--human", "--output", "json"})
+			rootCmd.SetOut(io.Discard)
+			rootCmd.SetErr(io.Discard)
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("Execute failed: %v", err)
+			}
+		})
+	})
+
+	var resp struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("expected JSON output, got decode error: %v\noutput: %s", err, out)
+	}
+	if !resp.OK {
+		t.Fatalf("expected ok=true when legacy flags are used")
+	}
+
+	if !strings.Contains(errOut, "WARNING: --human is deprecated and ignored. JSON output is always enabled. Will be removed in v0.6.0") {
+		t.Fatalf("expected --human deprecation warning, got %q", errOut)
+	}
+	if !strings.Contains(errOut, "WARNING: --output is deprecated and ignored. JSON output is always enabled. Will be removed in v0.6.0") {
+		t.Fatalf("expected --output deprecation warning, got %q", errOut)
+	}
+}
+
 func setRootTestGlobals() func() {
 	origNoUpdateCheck := noUpdateCheck
 	noUpdateCheck = true
@@ -125,6 +168,28 @@ func captureRootStdout(t *testing.T, fn func()) string {
 	out, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("read stdout failed: %v", err)
+	}
+	return string(out)
+}
+
+func captureRootStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe failed: %v", err)
+	}
+	os.Stderr = w
+
+	fn()
+
+	_ = w.Close()
+	os.Stderr = origStderr
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stderr failed: %v", err)
 	}
 	return string(out)
 }

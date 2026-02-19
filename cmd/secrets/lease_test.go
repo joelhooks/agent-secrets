@@ -18,8 +18,12 @@ func TestLeaseCommandFlagsJSONOptIn(t *testing.T) {
 	if leaseCmd.Flags().Lookup("json") == nil {
 		t.Fatalf("expected --json flag to exist")
 	}
-	if leaseCmd.Flags().Lookup("raw") != nil {
-		t.Fatalf("expected --raw flag to be removed")
+	rawFlag := leaseCmd.Flags().Lookup("raw")
+	if rawFlag == nil {
+		t.Fatalf("expected --raw flag to exist for backward compatibility")
+	}
+	if !rawFlag.Hidden {
+		t.Fatalf("expected --raw flag to be hidden")
 	}
 }
 
@@ -58,12 +62,8 @@ func TestLeaseRunEWithJSONFlagOutputsEnvelope(t *testing.T) {
 	restore := setLeaseTestGlobals(socket)
 	defer restore()
 
-	if err := leaseCmd.Flags().Set("json", "true"); err != nil {
-		t.Fatalf("failed to set --json flag: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = leaseCmd.Flags().Set("json", "false")
-	})
+	restoreJSONFlag := setLeaseFlag(t, "json", "true")
+	defer restoreJSONFlag()
 
 	out := captureLeaseStdout(t, func() {
 		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
@@ -86,12 +86,8 @@ func TestLeaseRunEDaemonConnectionErrorUsesStandardFix(t *testing.T) {
 	restore := setLeaseTestGlobals(filepath.Join(t.TempDir(), "missing.sock"))
 	defer restore()
 
-	if err := leaseCmd.Flags().Set("json", "true"); err != nil {
-		t.Fatalf("failed to set --json flag: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = leaseCmd.Flags().Set("json", "false")
-	})
+	restoreJSONFlag := setLeaseFlag(t, "json", "true")
+	defer restoreJSONFlag()
 
 	out := captureLeaseStdout(t, func() {
 		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
@@ -110,12 +106,8 @@ func TestLeaseRunESecretNotFoundUsesStandardFix(t *testing.T) {
 	restore := setLeaseTestGlobals(socket)
 	defer restore()
 
-	if err := leaseCmd.Flags().Set("json", "true"); err != nil {
-		t.Fatalf("failed to set --json flag: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = leaseCmd.Flags().Set("json", "false")
-	})
+	restoreJSONFlag := setLeaseFlag(t, "json", "true")
+	defer restoreJSONFlag()
 
 	out := captureLeaseStdout(t, func() {
 		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
@@ -128,19 +120,75 @@ func TestLeaseRunESecretNotFoundUsesStandardFix(t *testing.T) {
 	}
 }
 
+func TestLeaseRunEWithRawFlagWarnsOnStderr(t *testing.T) {
+	socket := startLeaseRPCServer(t, daemon.LeaseResult{
+		LeaseID:   "lease-789",
+		Value:     "raw-secret",
+		ExpiresAt: time.Date(2026, 2, 19, 14, 0, 0, 0, time.UTC),
+	})
+
+	restore := setLeaseTestGlobals(socket)
+	defer restore()
+
+	restoreRawFlag := setLeaseFlag(t, "raw", "true")
+	defer restoreRawFlag()
+
+	var out string
+	errOut := captureLeaseStderr(t, func() {
+		out = captureLeaseStdout(t, func() {
+			if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
+				t.Fatalf("RunE failed: %v", err)
+			}
+		})
+	})
+
+	if out != "raw-secret" {
+		t.Fatalf("expected raw value output, got %q", out)
+	}
+
+	expected := "WARNING: --raw is deprecated and now the default. Remove from scripts. Will be removed in v0.6.0"
+	if !strings.Contains(errOut, expected) {
+		t.Fatalf("expected raw deprecation warning in stderr, got %q", errOut)
+	}
+}
+
+func setLeaseFlag(t *testing.T, name, value string) func() {
+	t.Helper()
+
+	flag := leaseCmd.Flags().Lookup(name)
+	if flag == nil {
+		t.Fatalf("expected flag %q to exist", name)
+	}
+
+	origValue := flag.Value.String()
+	origChanged := flag.Changed
+
+	if err := leaseCmd.Flags().Set(name, value); err != nil {
+		t.Fatalf("failed to set --%s flag: %v", name, err)
+	}
+
+	return func() {
+		_ = leaseCmd.Flags().Set(name, origValue)
+		flag.Changed = origChanged
+	}
+}
+
 func setLeaseTestGlobals(testSocket string) func() {
 	origSocketPath := socketPath
 	origLeaseTTL := leaseTTL
 	origLeaseClientID := leaseClientID
+	origLeaseJSON := leaseJSON
 
 	socketPath = testSocket
 	leaseTTL = "1h"
 	leaseClientID = "test-client"
+	leaseJSON = false
 
 	return func() {
 		socketPath = origSocketPath
 		leaseTTL = origLeaseTTL
 		leaseClientID = origLeaseClientID
+		leaseJSON = origLeaseJSON
 	}
 }
 
@@ -235,6 +283,28 @@ func captureLeaseStdout(t *testing.T, fn func()) string {
 	out, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("read stdout failed: %v", err)
+	}
+	return string(out)
+}
+
+func captureLeaseStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe failed: %v", err)
+	}
+	os.Stderr = w
+
+	fn()
+
+	_ = w.Close()
+	os.Stderr = origStderr
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stderr failed: %v", err)
 	}
 	return string(out)
 }

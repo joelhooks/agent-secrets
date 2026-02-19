@@ -97,11 +97,24 @@
         "cmd/secrets/root.go",
         "internal/daemon/handlers.go"
       ]
+    },
+    {
+      "id": "story-mlsvicrr",
+      "title": "Backwards compatibility: restore deprecated flags with warnings",
+      "description": "Restore --raw, --human, --output as hidden deprecated flags that print STDERR warnings. Add success as alias for ok in JSON envelope for one version cycle.\n\n1. cmd/secrets/lease.go: Add --raw back as hidden flag. When used, print to STDERR: \"WARNING: --raw is deprecated and now the default. Remove from scripts. Will be removed in v0.6.0\". Still outputs raw (already default).\n\n2. cmd/secrets/root.go: Add --human and --output back as hidden flags. When used, print STDERR deprecation warnings. Both are no-ops.\n\n3. internal/output/output.go: Add Success bool json:\"success\" to Response that mirrors OK. Add DeprecationWarning(msg string) helper that prints to STDERR.\n\n4. README.md: Add migration guide section for v0.4.x → v0.5.x",
+      "priority": 1,
+      "passes": true,
+      "validationCommand": "cd /home/joel/Code/joelhooks/agent-secrets && go build ./cmd/secrets/ && go test ./...",
+      "targetFiles": [
+        "cmd/secrets/lease.go",
+        "cmd/secrets/root.go",
+        "internal/output/output.go"
+      ]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-19T00:53:39.274Z",
-    "totalIterations": 8,
-    "lastIteration": "2026-02-19T02:50:26.405Z"
+    "totalIterations": 9,
+    "lastIteration": "2026-02-19T03:04:34.551Z"
   }
 }

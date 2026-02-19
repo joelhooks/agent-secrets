@@ -285,3 +285,22 @@ Prior failure pattern detected: `verification_rejected`. Mitigation applied: ens
 There is a command-name collision risk around `secrets update`: secret-update now owns that name, so binary update was moved to `secrets self-update`. Future command-tree or update-hint changes must keep `cmd/secrets/root.go`, `cmd/secrets/update.go`, `internal/output/output.go`, and `internal/update/update.go` consistent.
 ### Files Context
 `cmd/secrets/update_secret.go` and `cmd/secrets/delete.go` are the new agent-facing secret mutation commands. `internal/daemon/protocol.go` defines the wire types/method names, and `internal/daemon/handlers.go` enforces update/delete behavior. `cmd/secrets/root.go` controls registration and self-documenting command output. Tests are primarily in `internal/daemon/handlers_test.go`, `cmd/secrets/update_secret_test.go`, `cmd/secrets/delete_test.go`, and `cmd/secrets/root_test.go`.
+
+---
+[2026-02-19T03:04:34.552Z]
+Completed: Backwards compatibility: restore deprecated flags with warnings
+Files: cmd/secrets/delete.go, cmd/secrets/delete_test.go, cmd/secrets/root.go, cmd/secrets/root_test.go, cmd/secrets/update.go, cmd/secrets/update_secret.go, cmd/secrets/update_secret_test.go, internal/daemon/handlers.go, internal/daemon/handlers_test.go, internal/daemon/protocol.go, internal/output/output.go, internal/update/update.go, prd.json, progress.txt, .ralph-context.json, .ralph-iterations.jsonl, README.md, cmd/secrets/lease.go, cmd/secrets/lease_test.go, internal/output/output_test.go
+Summary: Implemented story-mlsvicrr with TDD and preserved backward compatibility.
+
+- Restored `--raw` as hidden deprecated flag on lease, with required stderr warning and no-op behavior (`cmd/secrets/lease.go:41`, `cmd/secrets/lease.go:137`).
+- Restored `--human` and `--output` as hidden deprecated root flags, both no-op, both warning to stderr when used (`cmd/secrets/root.go:90`, `cmd/secrets/root.go:91`, `cmd/secrets/root.go:124`).
+- Added `success` alias to response envelope to mirror `ok`, including normalization in JSON printing (`internal/output/output.go:30`, `internal/output/output.go:160`).
+- Added `DeprecationWarning(msg string)` helper to print warnings to stderr (`internal/output/output.go:167`).
+- Added migration guide for v0.4.x -> v0.5.x and updated envelope docs (`README.md:82`).
+
+TDD sequence done:
+- Added failing tests first for hidden flags + warnings + `success` alias (`cmd/secrets/lease_test.go:123`, `cmd/secrets/root_test.go:111`, `internal/output/output_test.go:16`, `internal/output/output_test.go:235`).
+- Then implemented code until green.
+
+Prior failure pattern detected: `verification_rejected`.
+Mitigation: explicitly modified and verified required target files (`cmd/secrets/lease.go`, `cmd/secrets/root.go`, `internal/output/output.go`) and re-ran full validation.

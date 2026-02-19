@@ -79,9 +79,17 @@ secrets revoke --all
 
 > **Note:** The daemon must be running for most commands to work. The install script auto-starts it, but if you see "daemon not running" errors, run `secrets serve &`.
 
+## Migration Guide: v0.4.x -> v0.5.x
+
+`v0.5.x` keeps compatibility with older scripts while moving to JSON-first behavior.
+
+- `secrets lease <name>` now defaults to raw value output. `--raw` still works as a hidden deprecated no-op and prints a warning to `stderr`. Remove it from scripts before `v0.6.0`.
+- `--human` and `--output` are restored as hidden deprecated global flags. They are no-ops and print warnings to `stderr`. Remove them before `v0.6.0`.
+- JSON envelopes now include both `ok` and `success` for one version cycle. They carry the same boolean value.
+
 ## JSON Envelope Pattern
 
-All commands return a JSON response envelope with `ok`, `command`, `result`, and `next_actions`, except `secrets lease <name>` which returns only the raw secret value by default.
+All commands return a JSON response envelope with `ok`, `success`, `command`, `result`, and `next_actions`, except `secrets lease <name>` which returns only the raw secret value by default.
 
 ```bash
 # Root command returns command tree

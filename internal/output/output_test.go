@@ -19,6 +19,9 @@ func TestSuccessEnvelopeShape(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("expected OK=true")
 	}
+	if !resp.Success {
+		t.Fatalf("expected Success=true")
+	}
 	if resp.Command != "secrets status" {
 		t.Fatalf("unexpected command: %q", resp.Command)
 	}
@@ -38,7 +41,10 @@ func TestSuccessEnvelopeShape(t *testing.T) {
 	}
 
 	jsonText := string(encoded)
-	if strings.Contains(jsonText, `"success"`) || strings.Contains(jsonText, `"data"`) || strings.Contains(jsonText, `"actions"`) {
+	if !strings.Contains(jsonText, `"success":true`) {
+		t.Fatalf("expected success alias in json: %s", jsonText)
+	}
+	if strings.Contains(jsonText, `"data"`) || strings.Contains(jsonText, `"actions"`) {
 		t.Fatalf("legacy envelope fields leaked into json: %s", jsonText)
 	}
 }
@@ -55,6 +61,9 @@ func TestErrorEnvelopeIncludesCodeAndFix(t *testing.T) {
 
 	if resp.OK {
 		t.Fatalf("expected OK=false")
+	}
+	if resp.Success {
+		t.Fatalf("expected Success=false")
 	}
 	if resp.Error == nil {
 		t.Fatalf("expected error detail")
@@ -110,6 +119,9 @@ func TestPrintAlwaysOutputsJSON(t *testing.T) {
 	if !strings.Contains(out, `"ok": false`) {
 		t.Fatalf("expected json output, got %q", out)
 	}
+	if !strings.Contains(out, `"success": false`) {
+		t.Fatalf("expected success alias in json output, got %q", out)
+	}
 
 	var decoded Response
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
@@ -117,6 +129,9 @@ func TestPrintAlwaysOutputsJSON(t *testing.T) {
 	}
 	if decoded.Fix != "start the daemon with: secrets serve &" {
 		t.Fatalf("unexpected fix field in json output: %q", decoded.Fix)
+	}
+	if decoded.Success != decoded.OK {
+		t.Fatalf("expected success to mirror ok, got success=%t ok=%t", decoded.Success, decoded.OK)
 	}
 }
 
@@ -217,6 +232,16 @@ func TestActionLeaseWithTTLIncludesJSONFlag(t *testing.T) {
 	}
 }
 
+func TestDeprecationWarningPrintsToStderr(t *testing.T) {
+	out := captureStderr(t, func() {
+		DeprecationWarning("WARNING: deprecated flag")
+	})
+
+	if !strings.Contains(out, "WARNING: deprecated flag") {
+		t.Fatalf("expected warning in stderr, got %q", out)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 
@@ -231,6 +256,28 @@ func captureStdout(t *testing.T, fn func()) string {
 
 	_ = w.Close()
 	os.Stdout = orig
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	return string(out)
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	orig := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe failed: %v", err)
+	}
+	os.Stderr = w
+
+	fn()
+
+	_ = w.Close()
+	os.Stderr = orig
 
 	out, err := io.ReadAll(r)
 	if err != nil {
