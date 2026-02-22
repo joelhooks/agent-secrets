@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/joelhooks/agent-secrets/internal/audit"
 	"github.com/joelhooks/agent-secrets/internal/config"
+	"github.com/joelhooks/agent-secrets/internal/otel"
 	"github.com/joelhooks/agent-secrets/internal/types"
 )
 
@@ -19,6 +20,7 @@ type Manager struct {
 	leases      map[string]*types.Lease
 	cfg         *config.Config
 	auditLogger *audit.Logger
+	otelEmitter *otel.Emitter
 
 	// Cleanup loop control
 	cleanupDone chan struct{}
@@ -26,13 +28,16 @@ type Manager struct {
 }
 
 // NewManager creates a new lease manager and loads persisted leases.
-func NewManager(cfg *config.Config, auditLogger *audit.Logger) (*Manager, error) {
+func NewManager(cfg *config.Config, auditLogger *audit.Logger, otelEmitter ...*otel.Emitter) (*Manager, error) {
 	m := &Manager{
 		leases:      make(map[string]*types.Lease),
 		cfg:         cfg,
 		auditLogger: auditLogger,
 		cleanupDone: make(chan struct{}),
 		cleanupStop: make(chan struct{}),
+	}
+	if len(otelEmitter) > 0 && otelEmitter[0] != nil {
+		m.otelEmitter = otelEmitter[0]
 	}
 
 	// Load persisted leases
@@ -47,6 +52,8 @@ func NewManager(cfg *config.Config, auditLogger *audit.Logger) (*Manager, error)
 }
 
 // Acquire creates a new lease for the specified secret.
+// If the same client already holds an active lease on this secret, the old
+// lease is silently replaced (revoked + removed) to prevent accumulation.
 func (m *Manager) Acquire(secretName, clientID string, ttl time.Duration) (*types.Lease, error) {
 	// Validate TTL
 	if ttl <= 0 {
@@ -73,11 +80,35 @@ func (m *Manager) Acquire(secretName, clientID string, ttl time.Duration) (*type
 	}
 
 	m.mu.Lock()
+	// Dedup: revoke and remove any existing active lease for this client+secret
+	var replacedID string
+	for id, existing := range m.leases {
+		if existing.SecretName == secretName &&
+			existing.ClientID == clientID &&
+			IsValid(existing) {
+			replacedID = id
+			delete(m.leases, id)
+			break
+		}
+	}
 	m.leases[lease.ID] = lease
 	m.mu.Unlock()
 
 	// Persist and log
 	_ = m.Save()
+
+	if replacedID != "" {
+		entry := audit.NewEntry(types.ActionLeaseReplace, true).
+			WithSecret(secretName).
+			WithClient(clientID).
+			WithLease(replacedID).
+			WithDetails(fmt.Sprintf("replaced by %s, TTL: %v", lease.ID, ttl)).
+			Build()
+		_ = m.auditLogger.Log(entry)
+		if m.otelEmitter != nil {
+			m.otelEmitter.EmitLeaseReplaced(secretName, clientID, replacedID, lease.ID)
+		}
+	}
 
 	entry := audit.NewEntry(types.ActionLeaseAcquire, true).
 		WithSecret(secretName).
@@ -221,6 +252,9 @@ func (m *Manager) CleanupExpired() {
 
 	if len(expired) > 0 {
 		_ = m.Save()
+		if m.otelEmitter != nil {
+			m.otelEmitter.EmitLeaseCleanup(len(expired))
+		}
 	}
 }
 

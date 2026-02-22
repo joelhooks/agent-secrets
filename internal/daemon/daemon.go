@@ -13,6 +13,7 @@ import (
 	"github.com/joelhooks/agent-secrets/internal/config"
 	"github.com/joelhooks/agent-secrets/internal/killswitch"
 	"github.com/joelhooks/agent-secrets/internal/lease"
+	"github.com/joelhooks/agent-secrets/internal/otel"
 	"github.com/joelhooks/agent-secrets/internal/rotation"
 	"github.com/joelhooks/agent-secrets/internal/store"
 	"github.com/joelhooks/agent-secrets/internal/types"
@@ -33,6 +34,7 @@ type Daemon struct {
 	rotationExecutor *rotation.Executor
 	killswitch       *killswitch.Killswitch
 	auditLogger      *audit.Logger
+	otelEmitter      *otel.Emitter
 
 	// Shutdown coordination
 	done chan struct{}
@@ -62,6 +64,9 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 		return nil, fmt.Errorf("failed to create audit logger: %w", err)
 	}
 
+	// Initialize OTEL emitter (best-effort, never blocks)
+	otelEmitter := otel.NewEmitter()
+
 	// Initialize store with optional permission check skip
 	st := store.NewWithOptions(cfg, skipPermissionCheck)
 	if err := st.Load(); err != nil {
@@ -72,7 +77,7 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 	}
 
 	// Initialize lease manager
-	leaseManager, err := lease.NewManager(cfg, auditLogger)
+	leaseManager, err := lease.NewManager(cfg, auditLogger, otelEmitter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lease manager: %w", err)
 	}
@@ -94,6 +99,7 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 		rotationExecutor: rotationExecutor,
 		killswitch:       ks,
 		auditLogger:      auditLogger,
+		otelEmitter:      otelEmitter,
 		done:             make(chan struct{}),
 	}, nil
 }
@@ -140,6 +146,10 @@ func (d *Daemon) Start() error {
 	// Start lease cleanup loop
 	d.leaseManager.StartCleanupLoop(1 * time.Minute)
 
+	// Emit OTEL start event
+	secrets, _ := d.store.List()
+	d.otelEmitter.EmitDaemonStart(d.cfg.SocketPath, len(secrets))
+
 	// Accept connections in a goroutine
 	d.wg.Add(1)
 	go d.acceptLoop()
@@ -177,6 +187,9 @@ func (d *Daemon) Stop() error {
 			Build()
 		_ = d.auditLogger.Log(entry)
 	}
+
+	// Emit OTEL stop event
+	d.otelEmitter.EmitDaemonStop(time.Since(d.startedAt))
 
 	// Log daemon stop
 	entry := audit.NewEntry(types.ActionDaemonStop, true).

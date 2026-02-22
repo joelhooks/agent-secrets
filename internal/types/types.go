@@ -56,6 +56,7 @@ const (
 	ActionSecretDelete  Action = "secret_delete"
 	ActionSecretRotate  Action = "secret_rotate"
 	ActionLeaseAcquire  Action = "lease_acquire"
+	ActionLeaseReplace  Action = "lease_replace"
 	ActionLeaseRevoke   Action = "lease_revoke"
 	ActionLeaseExpire   Action = "lease_expire"
 	ActionKillswitch    Action = "killswitch"

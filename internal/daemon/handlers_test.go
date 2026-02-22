@@ -528,14 +528,15 @@ func TestHandleRevokeAll(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	// Add a secret and acquire multiple leases
+	// Add a secret and acquire multiple leases from different clients
+	// (same client+secret deduplicates — ADR-0110)
 	err := handler.store.Add("test-secret", "test-value", "")
 	if err != nil {
 		t.Fatalf("failed to add secret: %v", err)
 	}
 
 	for i := 0; i < 3; i++ {
-		_, err := handler.leaseManager.Acquire("test-secret", "test-client", 1*time.Hour)
+		_, err := handler.leaseManager.Acquire("test-secret", fmt.Sprintf("client-%d", i), 1*time.Hour)
 		if err != nil {
 			t.Fatalf("failed to acquire lease: %v", err)
 		}

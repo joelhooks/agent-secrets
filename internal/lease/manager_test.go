@@ -451,6 +451,82 @@ func TestCleanupLoop(t *testing.T) {
 	}
 }
 
+func TestAcquireDeduplicatesSameClientSecret(t *testing.T) {
+	mgr, _ := setupTestManager(t)
+
+	// First lease
+	lease1, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("first Acquire() failed: %v", err)
+	}
+
+	// Second lease for same client+secret should replace the first
+	lease2, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("second Acquire() failed: %v", err)
+	}
+
+	if lease1.ID == lease2.ID {
+		t.Error("second lease should have a different ID")
+	}
+
+	// Only one active lease should exist
+	active := mgr.List()
+	if len(active) != 1 {
+		t.Errorf("List() returned %d leases, want 1 (dedup)", len(active))
+	}
+
+	if active[0].ID != lease2.ID {
+		t.Errorf("active lease ID = %v, want %v (newer lease)", active[0].ID, lease2.ID)
+	}
+
+	// Old lease should be gone
+	_, err = mgr.Get(lease1.ID)
+	if err != types.ErrLeaseNotFound {
+		t.Errorf("old lease should be deleted, got err = %v", err)
+	}
+}
+
+func TestAcquireDoesNotDeduplicateDifferentClients(t *testing.T) {
+	mgr, _ := setupTestManager(t)
+
+	_, err := mgr.Acquire("test-secret", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	_, err = mgr.Acquire("test-secret", "client-2", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	// Two different clients should both hold leases
+	active := mgr.List()
+	if len(active) != 2 {
+		t.Errorf("List() returned %d leases, want 2 (different clients)", len(active))
+	}
+}
+
+func TestAcquireDoesNotDeduplicateDifferentSecrets(t *testing.T) {
+	mgr, _ := setupTestManager(t)
+
+	_, err := mgr.Acquire("secret-1", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	_, err = mgr.Acquire("secret-2", "client-1", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+
+	// Same client but different secrets should both hold leases
+	active := mgr.List()
+	if len(active) != 2 {
+		t.Errorf("List() returned %d leases, want 2 (different secrets)", len(active))
+	}
+}
+
 func TestIsExpiredHelper(t *testing.T) {
 	// Test the helper functions used by manager
 	validLease := &types.Lease{
