@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"github.com/joelhooks/agent-secrets/internal/output"
@@ -19,8 +20,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "secrets",
-	Short: "Portable credential management for AI agents",
+	Use:           "secrets",
+	Short:         "Portable credential management for AI agents",
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	Long: `agent-secrets provides secure, time-bounded credential management with
 audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -117,6 +120,12 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		// Error JSON is already printed by the command's RunE.
+		// SilenceErrors prevents cobra from re-printing it.
+		var exitErr *output.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Code)
+		}
 		os.Exit(1)
 	}
 }

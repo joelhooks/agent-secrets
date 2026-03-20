@@ -137,6 +137,27 @@ func ErrorMsgWithCode(command, msg string, exitCode int, actions ...Action) Resp
 	}
 }
 
+// ExitError is returned from RunE to signal a non-zero exit code.
+// SilenceErrors prevents cobra from printing it; the JSON was already emitted by Print.
+type ExitError struct {
+	Code int
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("exit code %d", e.Code)
+}
+
+// PrintFail prints the error response JSON and returns an ExitError for cobra.
+// Use as: return output.PrintFail(output.Error(cmd, err, actions...))
+func PrintFail(r Response) error {
+	Print(r)
+	code := r.ExitCode
+	if code == 0 {
+		code = types.ExitGenericError
+	}
+	return &ExitError{Code: code}
+}
+
 // Fatal prints an error response and exits with the appropriate exit code.
 func Fatal(r Response) {
 	Print(r)

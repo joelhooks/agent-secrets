@@ -34,8 +34,7 @@ Examples:
 		// Resolve absolute path
 		absPath, err := filepath.Abs(scanPath)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to resolve path: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to resolve path: %w", err)))
 		}
 
 		// Create scanner with default patterns
@@ -45,8 +44,7 @@ Examples:
 		// Run scan
 		result, err := s.Scan(absPath)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("scan failed: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("scan failed: %w", err)))
 		}
 
 		// Format findings for output

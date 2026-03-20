@@ -27,24 +27,20 @@ Examples:
 			// Trigger killswitch - revoke all
 			resp, err := rpcCall(socketPath, daemon.MethodRevokeAll, daemon.RevokeAllParams{})
 			if err != nil {
-				output.Print(output.Error(commandName, fmt.Errorf("failed to revoke all leases: %w", err)))
-				return nil
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to revoke all leases: %w", err)))
 			}
 
 			var result daemon.RevokeAllResult
 			data, err := json.Marshal(resp.Result)
 			if err != nil {
-				output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-				return nil
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 			}
 			if err := json.Unmarshal(data, &result); err != nil {
-				output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-				return nil
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 			}
 
 			if !result.Success {
-				output.Print(output.ErrorMsg(commandName, result.Message))
-				return nil
+				return output.PrintFail(output.ErrorMsg(commandName, result.Message))
 			}
 
 			killswitchData := map[string]interface{}{
@@ -62,8 +58,7 @@ Examples:
 
 		// Revoke specific lease
 		if len(args) == 0 {
-			output.Print(output.ErrorMsg(commandName, "lease-id required (or use --all for killswitch)", output.ActionHelp("revoke")))
-			return nil
+			return output.PrintFail(output.ErrorMsg(commandName, "lease-id required (or use --all for killswitch)", output.ActionHelp("revoke")))
 		}
 
 		leaseID := args[0]
@@ -73,24 +68,20 @@ Examples:
 
 		resp, err := rpcCall(socketPath, daemon.MethodRevoke, params)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to revoke lease: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to revoke lease: %w", err)))
 		}
 
 		var result daemon.RevokeResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		if !result.Success {
-			output.Print(output.ErrorMsg(commandName, result.Message))
-			return nil
+			return output.PrintFail(output.ErrorMsg(commandName, result.Message))
 		}
 
 		revokeData := map[string]interface{}{

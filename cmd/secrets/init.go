@@ -24,8 +24,7 @@ and sets up the required directory structure.`,
 
 		// Initialize store (creates directories, identity, and empty secrets file)
 		if err := st.Init(); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to initialize: %w", err)))
-			return fmt.Errorf("failed to initialize: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to initialize: %w", err)))
 		}
 
 		output.Print(output.Success(

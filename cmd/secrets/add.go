@@ -43,16 +43,14 @@ var addCmd = &cobra.Command{
 					value = scanner.Text()
 				}
 				if err := scanner.Err(); err != nil {
-					output.Print(output.Error(commandName, fmt.Errorf("failed to read from stdin: %w", err)))
-					return fmt.Errorf("failed to read from stdin: %w", err)
+					return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to read from stdin: %w", err)))
 				}
 			} else {
 				// Interactive prompt
 				fmt.Printf("Enter secret value for '%s': ", name)
 				byteValue, err := term.ReadPassword(int(syscall.Stdin))
 				if err != nil {
-					output.Print(output.Error(commandName, fmt.Errorf("failed to read password: %w", err)))
-					return fmt.Errorf("failed to read password: %w", err)
+					return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to read password: %w", err)))
 				}
 				fmt.Println() // Add newline after hidden input
 				value = string(byteValue)
@@ -61,13 +59,12 @@ var addCmd = &cobra.Command{
 
 		value = strings.TrimSpace(value)
 		if value == "" {
-			output.Print(output.ErrorMsgWithFix(
+			return output.PrintFail(output.ErrorMsgWithFix(
 				commandName,
 				"secret value cannot be empty",
 				"Provide a value via --value, stdin pipe, or interactive prompt",
 				output.ActionHelp("add"),
 			))
-			return fmt.Errorf("secret value cannot be empty")
 		}
 
 		params := daemon.AddParams{
@@ -86,22 +83,18 @@ var addCmd = &cobra.Command{
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return userErr
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
-			output.Print(output.Error(commandName, fmt.Errorf("failed to add secret: %w", err)))
-			return fmt.Errorf("failed to add secret: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to add secret: %w", err)))
 		}
 
 		var result daemon.AddResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return fmt.Errorf("failed to parse response: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return fmt.Errorf("failed to parse result: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		if result.Success {
@@ -120,8 +113,7 @@ var addCmd = &cobra.Command{
 				output.ActionsAfterAdd(name)...,
 			))
 		} else {
-			output.Print(output.ErrorMsg(commandName, result.Message))
-			return fmt.Errorf("failed to add secret: %s", result.Message)
+			return output.PrintFail(output.ErrorMsg(commandName, result.Message))
 		}
 
 		return nil

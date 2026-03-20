@@ -67,30 +67,25 @@ Examples:
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return nil
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
 			if strings.Contains(strings.ToLower(err.Error()), "secret not found") {
-				output.Print(output.ErrorWithFix(
+				return output.PrintFail(output.ErrorWithFix(
 					commandName,
 					fmt.Errorf("failed to acquire lease: %w", err),
 					"Check available secrets: secrets status",
 				))
-				return nil
 			}
-			output.Print(output.Error(commandName, fmt.Errorf("failed to acquire lease: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to acquire lease: %w", err)))
 		}
 
 		var result daemon.LeaseResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		// Default behavior: output ONLY the secret value (for piping/substitution)

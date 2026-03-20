@@ -90,9 +90,8 @@ func TestLeaseRunEDaemonConnectionErrorUsesStandardFix(t *testing.T) {
 	defer restoreJSONFlag()
 
 	out := captureLeaseStdout(t, func() {
-		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
-			t.Fatalf("RunE failed: %v", err)
-		}
+		// RunE now returns ExitError for error paths (non-zero exit code).
+		_ = leaseCmd.RunE(leaseCmd, []string{"github_token"})
 	})
 
 	if !strings.Contains(out, `"fix": "Start the daemon: secrets serve \u0026"`) {

@@ -29,13 +29,11 @@ Use --background to run as a background process.`,
 		// Create and start daemon
 		d, err := daemon.NewDaemonWithOptions(cfg, skipPermissionCheck)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to create daemon: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to create daemon: %w", err)))
 		}
 
 		if err := d.Start(); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to start daemon: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to start daemon: %w", err)))
 		}
 
 		if background {
@@ -68,8 +66,7 @@ Use --background to run as a background process.`,
 
 		fmt.Println("\nShutting down...")
 		if err := d.Stop(); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("shutdown error: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("shutdown error: %w", err)))
 		}
 
 		output.Print(output.Success(commandName, map[string]interface{}{

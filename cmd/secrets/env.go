@@ -40,15 +40,13 @@ Examples:
 		// Find project configuration
 		cfg, projectDir, err := project.FindProjectConfig()
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
 		}
 
 		// Determine TTL (flag overrides config)
 		ttl, err := parseTTL(cfg, envTTL)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("invalid TTL: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("invalid TTL: %w", err)))
 		}
 
 		// Build env file path (relative to project directory)
@@ -57,7 +55,7 @@ Examples:
 		// Check if env file exists and handle --force
 		if !envForce && !envDryRun {
 			if _, err := os.Stat(envFilePath); err == nil {
-				output.Print(output.ErrorMsg(
+				return output.PrintFail(output.ErrorMsg(
 					commandName,
 					fmt.Sprintf("env file already exists: %s (use --force to overwrite)", envFilePath),
 					output.Action{
@@ -69,22 +67,19 @@ Examples:
 						Command:     fmt.Sprintf("cat %s | grep 'secrets-ttl'", envFilePath),
 					},
 				))
-				return fmt.Errorf("env file exists")
 			}
 		}
 
 		// Get adapter based on source
 		adapter, err := getAdapter(cfg.Source)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to get adapter: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to get adapter: %w", err)))
 		}
 
 		// Pull secrets from source
 		secrets, err := adapter.Pull(cfg.Project, cfg.Scope)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
 		}
 
 		// Check for required vars
@@ -96,8 +91,7 @@ Examples:
 				}
 			}
 			if len(missingVars) > 0 {
-				output.Print(output.Error(commandName, fmt.Errorf("missing required vars: %v", missingVars)))
-				return fmt.Errorf("required vars missing")
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("missing required vars: %v", missingVars)))
 			}
 		}
 
@@ -127,8 +121,7 @@ Examples:
 
 		// Write to env file with TTL
 		if err := envfile.WriteWithTTL(envFilePath, secrets, ttl, cfg.Source); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to write env file: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to write env file: %w", err)))
 		}
 
 		// Success response
