@@ -30,19 +30,16 @@ Examples:
 		const commandName = "secrets health"
 		resp, err := rpcCall(socketPath, daemon.MethodHealth, daemon.HealthParams{})
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to get health report: %w", err)))
-			return fmt.Errorf("failed to get health report: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to get health report: %w", err)))
 		}
 
 		var result daemon.HealthResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return fmt.Errorf("failed to parse response: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return fmt.Errorf("failed to parse result: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		// If warnings-only mode and no warnings, short-circuit

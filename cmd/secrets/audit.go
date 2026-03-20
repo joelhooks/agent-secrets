@@ -26,19 +26,16 @@ The response includes suggested filtering actions to help narrow down results.`,
 
 		resp, err := rpcCall(socketPath, daemon.MethodAudit, params)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to fetch audit log: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to fetch audit log: %w", err)))
 		}
 
 		var result daemon.AuditResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		if len(result.Entries) == 0 {

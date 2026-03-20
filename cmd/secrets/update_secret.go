@@ -34,19 +34,17 @@ var updateCmd = &cobra.Command{
 		name := args[0]
 		value, err := readSecretInputValue(name, updateSecretValue)
 		if err != nil {
-			output.Print(output.Error(commandName, err))
-			return err
+			return output.PrintFail(output.Error(commandName, err))
 		}
 
 		value = strings.TrimSpace(value)
 		if value == "" {
-			output.Print(output.ErrorMsgWithFix(
+			return output.PrintFail(output.ErrorMsgWithFix(
 				commandName,
 				"secret value cannot be empty",
 				"Provide a value via --value, stdin pipe, or interactive prompt",
 				output.ActionHelp("update"),
 			))
-			return fmt.Errorf("secret value cannot be empty")
 		}
 
 		params := daemon.UpdateParams{
@@ -67,35 +65,29 @@ var updateCmd = &cobra.Command{
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return userErr
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
 
 			if strings.Contains(strings.ToLower(err.Error()), "secret not found") {
 				fix := fmt.Sprintf("Secret %q does not exist. Add it first: secrets add %s", name, name)
-				output.Print(output.ErrorWithFix(commandName, fmt.Errorf("failed to update secret: %w", err), fix, output.ActionAdd(name)))
-				return nil
+				return output.PrintFail(output.ErrorWithFix(commandName, fmt.Errorf("failed to update secret: %w", err), fix, output.ActionAdd(name)))
 			}
 
-			output.Print(output.Error(commandName, fmt.Errorf("failed to update secret: %w", err), output.ActionAdd(name)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to update secret: %w", err), output.ActionAdd(name)))
 		}
 
 		var result daemon.UpdateResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return fmt.Errorf("failed to parse response: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return fmt.Errorf("failed to parse result: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		if !result.Success {
 			fix := fmt.Sprintf("Use `secrets add %s --value <value>` to create it first.", name)
-			output.Print(output.ErrorMsgWithFix(commandName, result.Message, fix, output.ActionAdd(name)))
-			return nil
+			return output.PrintFail(output.ErrorMsgWithFix(commandName, result.Message, fix, output.ActionAdd(name)))
 		}
 
 		output.Print(output.Success(

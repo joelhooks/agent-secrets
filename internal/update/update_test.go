@@ -330,10 +330,20 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 func installMockHTTPClient(t *testing.T, rt roundTripFunc) {
 	t.Helper()
 
+	mockClient := &http.Client{Transport: rt}
+
 	prev := http.DefaultClient
-	http.DefaultClient = &http.Client{Transport: rt}
+	prevHTTP := httpClient
+	prevDL := downloadClient
+
+	http.DefaultClient = mockClient
+	httpClient = mockClient
+	downloadClient = mockClient
+
 	t.Cleanup(func() {
 		http.DefaultClient = prev
+		httpClient = prevHTTP
+		downloadClient = prevDL
 	})
 }
 

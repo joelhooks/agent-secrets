@@ -116,9 +116,8 @@ func TestListRunEDaemonConnectionErrorUsesStandardFix(t *testing.T) {
 	defer restore()
 
 	out := captureListStdout(t, func() {
-		if err := listCmd.RunE(listCmd, nil); err != nil {
-			t.Fatalf("RunE failed: %v", err)
-		}
+		// RunE now returns ExitError for error paths (non-zero exit code).
+		_ = listCmd.RunE(listCmd, nil)
 	})
 
 	if !strings.Contains(out, `"fix": "Start the daemon: secrets serve \u0026"`) {

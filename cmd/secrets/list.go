@@ -27,22 +27,18 @@ var listCmd = &cobra.Command{
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return nil
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
-			output.Print(output.Error(commandName, fmt.Errorf("failed to list secrets: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to list secrets: %w", err)))
 		}
 
 		var listResult daemon.ListResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &listResult); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		type listedSecret struct {

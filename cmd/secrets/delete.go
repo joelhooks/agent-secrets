@@ -28,17 +28,15 @@ var deleteCmd = &cobra.Command{
 		if !deleteForce {
 			confirmed, err := confirmDeleteSecret(name)
 			if err != nil {
-				output.Print(output.Error(commandName, fmt.Errorf("failed to read confirmation: %w", err)))
-				return err
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to read confirmation: %w", err)))
 			}
 			if !confirmed {
-				output.Print(output.ErrorMsgWithFix(
+				return output.PrintFail(output.ErrorMsgWithFix(
 					commandName,
 					"deletion cancelled",
 					"Re-run with --force to skip confirmation",
 					output.ActionHelp("delete"),
 				))
-				return nil
 			}
 		}
 
@@ -51,38 +49,32 @@ var deleteCmd = &cobra.Command{
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return nil
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
 
 			if strings.Contains(strings.ToLower(err.Error()), "secret not found") {
-				output.Print(output.ErrorWithFix(
+				return output.PrintFail(output.ErrorWithFix(
 					commandName,
 					fmt.Errorf("failed to delete secret: %w", err),
 					"Check available secrets: secrets list",
 					output.Action{Command: "secrets list", Description: "List stored secret names"},
 				))
-				return nil
 			}
 
-			output.Print(output.Error(commandName, fmt.Errorf("failed to delete secret: %w", err)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to delete secret: %w", err)))
 		}
 
 		var result daemon.DeleteResult
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		if !result.Success {
-			output.Print(output.ErrorMsg(commandName, result.Message))
-			return nil
+			return output.PrintFail(output.ErrorMsg(commandName, result.Message))
 		}
 
 		output.Print(output.Success(

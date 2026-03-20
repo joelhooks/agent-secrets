@@ -248,6 +248,10 @@ func DoUpdate(currentVersion string) error {
 	return nil
 }
 
+// httpClient is a shared HTTP client with a reasonable timeout.
+// Prevents hangs when the GitHub API is slow or unreachable.
+var httpClient = &http.Client{Timeout: 5 * time.Second}
+
 func getLatestRelease() (*ReleaseInfo, error) {
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
@@ -257,7 +261,7 @@ func getLatestRelease() (*ReleaseInfo, error) {
 	// Set User-Agent to avoid rate limiting
 	req.Header.Set("User-Agent", fmt.Sprintf("%s-cli", repoName))
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +279,11 @@ func getLatestRelease() (*ReleaseInfo, error) {
 	return &release, nil
 }
 
+// downloadClient uses a longer timeout for binary downloads.
+var downloadClient = &http.Client{Timeout: 60 * time.Second}
+
 func downloadBinary(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := downloadClient.Get(url)
 	if err != nil {
 		return "", err
 	}

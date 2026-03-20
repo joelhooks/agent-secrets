@@ -27,22 +27,18 @@ var statusCmd = &cobra.Command{
 					"Start the daemon: secrets serve &",
 					"secrets --help",
 				).WithContext("Socket path", socketPath)
-				output.Print(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
-				return userErr
+				return output.PrintFail(output.ErrorWithFix(commandName, userErr, "Start the daemon: secrets serve &"))
 			}
-			output.Print(output.Error(commandName, fmt.Errorf("failed to get status: %w", err)))
-			return fmt.Errorf("failed to get status: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to get status: %w", err)))
 		}
 
 		var result types.DaemonStatus
 		data, err := json.Marshal(resp.Result)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
-			return fmt.Errorf("failed to parse response: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse response: %w", err)))
 		}
 		if err := json.Unmarshal(data, &result); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
-			return fmt.Errorf("failed to parse result: %w", err)
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to parse result: %w", err)))
 		}
 
 		// Build data map for JSON response

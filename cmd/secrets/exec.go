@@ -40,27 +40,23 @@ Examples:
 		// Find .secrets.json
 		cfg, projectDir, err := project.FindProjectConfig()
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to find project config: %w", err)))
 		}
 
 		// Get adapter for the configured source
 		adapter, err := getAdapter(cfg.Source)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to initialize adapter: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to initialize adapter: %w", err)))
 		}
 
 		// Pull secrets
 		secrets, err := adapter.Pull(cfg.Project, cfg.Scope)
 		if err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to pull secrets: %w", err)))
 		}
 
 		if len(secrets) == 0 {
-			output.Print(output.Error(commandName, fmt.Errorf("no secrets found for project %q in scope %q", cfg.Project, cfg.Scope)))
-			return nil
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("no secrets found for project %q in scope %q", cfg.Project, cfg.Scope)))
 		}
 
 		// Build environment variables
@@ -77,8 +73,7 @@ Examples:
 		if execTTL != "" {
 			ttl, err := time.ParseDuration(execTTL)
 			if err != nil {
-				output.Print(output.Error(commandName, fmt.Errorf("invalid ttl: %w", err)))
-				return err
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("invalid ttl: %w", err)))
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), ttl)
 		} else {
@@ -100,8 +95,7 @@ Examples:
 
 		// Start subprocess
 		if err := command.Start(); err != nil {
-			output.Print(output.Error(commandName, fmt.Errorf("failed to start command: %w", err)))
-			return err
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to start command: %w", err)))
 		}
 
 		// Wait for either signal or process completion
@@ -134,8 +128,7 @@ Examples:
 					// Return exit code
 					os.Exit(exitErr.ExitCode())
 				}
-				output.Print(output.Error(commandName, fmt.Errorf("command failed: %w", err)))
-				return err
+				return output.PrintFail(output.Error(commandName, fmt.Errorf("command failed: %w", err)))
 			}
 
 			// Success
@@ -157,8 +150,7 @@ Examples:
 			if command.Process != nil {
 				_ = command.Process.Kill()
 			}
-			output.Print(output.Error(commandName, fmt.Errorf("command exceeded TTL: %s", execTTL)))
-			return fmt.Errorf("timeout")
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("command exceeded TTL: %s", execTTL)))
 		}
 	},
 }
