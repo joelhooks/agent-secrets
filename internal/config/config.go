@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/types"
@@ -34,6 +35,12 @@ type Config struct {
 
 	// SocketPath is the full path to the Unix socket.
 	SocketPath string `json:"socket_path"`
+
+	// SocketMode is the octal permission mode applied to the Unix socket.
+	SocketMode string `json:"socket_mode"`
+
+	// SocketGroup is the optional local group that owns the Unix socket.
+	SocketGroup string `json:"socket_group,omitempty"`
 
 	// IdentityPath is the full path to the age identity file.
 	IdentityPath string `json:"identity_path"`
@@ -72,6 +79,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Directory:       baseDir,
 		SocketPath:      filepath.Join(baseDir, DefaultSocket),
+		SocketMode:      "0600",
 		IdentityPath:    filepath.Join(baseDir, DefaultIdentityFile),
 		SecretsPath:     filepath.Join(baseDir, DefaultSecretsFile),
 		AuditPath:       filepath.Join(baseDir, DefaultAuditFile),
@@ -80,6 +88,22 @@ func DefaultConfig() *Config {
 		MaxLeaseTTL:     24 * time.Hour,
 		RotationTimeout: 30 * time.Second,
 	}
+}
+
+// SocketFileMode parses SocketMode as an octal file permission mode.
+func (c *Config) SocketFileMode() (os.FileMode, error) {
+	mode := c.SocketMode
+	if mode == "" {
+		mode = "0600"
+	}
+	parsed, err := strconv.ParseUint(mode, 8, 32)
+	if err != nil || (parsed != 0600 && parsed != 0660) {
+		return 0, &ConfigError{Field: "socket_mode", Message: "must be 0600 or 0660"}
+	}
+	if parsed == 0660 && c.SocketGroup == "" {
+		return 0, &ConfigError{Field: "socket_group", Message: "is required when socket_mode is 0660"}
+	}
+	return os.FileMode(parsed), nil
 }
 
 // Load reads configuration from the config file in the default directory.
@@ -142,6 +166,12 @@ func (c *Config) EnsureDirectories() error {
 func (c *Config) Validate() error {
 	if c.Directory == "" {
 		return &ConfigError{Field: "directory", Message: "cannot be empty"}
+	}
+	if c.SocketPath == "" {
+		return &ConfigError{Field: "socket_path", Message: "cannot be empty"}
+	}
+	if _, err := c.SocketFileMode(); err != nil {
+		return err
 	}
 	if c.DefaultLeaseTTL <= 0 {
 		return &ConfigError{Field: "default_lease_ttl", Message: "must be positive"}

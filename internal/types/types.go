@@ -16,12 +16,12 @@ type Secret struct {
 
 // Lease represents a time-bounded access grant to a secret.
 type Lease struct {
-	ID        string    `json:"id"`
-	SecretName string   `json:"secret_name"`
-	ClientID  string    `json:"client_id"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Revoked   bool      `json:"revoked"`
+	ID         string    `json:"id"`
+	SecretName string    `json:"secret_name"`
+	ClientID   string    `json:"client_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Revoked    bool      `json:"revoked"`
 }
 
 // LeaseRequest represents a request to acquire a lease on a secret.
@@ -39,13 +39,13 @@ type LeaseResponse struct {
 
 // AuditEntry represents a single audit log entry.
 type AuditEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Action    Action    `json:"action"`
-	SecretName string   `json:"secret_name,omitempty"`
-	ClientID  string    `json:"client_id,omitempty"`
-	LeaseID   string    `json:"lease_id,omitempty"`
-	Details   string    `json:"details,omitempty"`
-	Success   bool      `json:"success"`
+	Timestamp  time.Time `json:"timestamp"`
+	Action     Action    `json:"action"`
+	SecretName string    `json:"secret_name,omitempty"`
+	ClientID   string    `json:"client_id,omitempty"`
+	LeaseID    string    `json:"lease_id,omitempty"`
+	Details    string    `json:"details,omitempty"`
+	Success    bool      `json:"success"`
 }
 
 // Action represents the type of operation being audited.
@@ -62,6 +62,7 @@ const (
 	ActionKillswitch    Action = "killswitch"
 	ActionDaemonStart   Action = "daemon_start"
 	ActionDaemonStop    Action = "daemon_stop"
+	ActionDaemonRestart Action = "daemon_restart"
 	ActionHeartbeatFail Action = "heartbeat_fail"
 )
 
@@ -76,9 +77,9 @@ type RotationResult struct {
 
 // KillswitchOptions controls killswitch behavior.
 type KillswitchOptions struct {
-	RevokeAll  bool `json:"revoke_all"`
-	RotateAll  bool `json:"rotate_all"`
-	WipeStore  bool `json:"wipe_store"`
+	RevokeAll bool `json:"revoke_all"`
+	RotateAll bool `json:"rotate_all"`
+	WipeStore bool `json:"wipe_store"`
 }
 
 // HeartbeatConfig configures optional remote heartbeat monitoring.
@@ -93,11 +94,11 @@ type HeartbeatConfig struct {
 
 // DaemonStatus represents the current state of the daemon.
 type DaemonStatus struct {
-	Running       bool          `json:"running"`
-	StartedAt     time.Time     `json:"started_at"`
-	SecretsCount  int           `json:"secrets_count"`
-	ActiveLeases  int           `json:"active_leases"`
-	Heartbeat     *HeartbeatConfig `json:"heartbeat,omitempty"`
+	Running      bool             `json:"running"`
+	StartedAt    time.Time        `json:"started_at"`
+	SecretsCount int              `json:"secrets_count"`
+	ActiveLeases int              `json:"active_leases"`
+	Heartbeat    *HeartbeatConfig `json:"heartbeat,omitempty"`
 }
 
 // RPCRequest represents a JSON-RPC 2.0 request.

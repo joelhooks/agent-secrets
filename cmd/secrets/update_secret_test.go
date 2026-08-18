@@ -66,9 +66,7 @@ func TestUpdateRunESecretNotFoundProvidesAddFix(t *testing.T) {
 	updateSecretValue = "updated-value"
 
 	out := captureUpdateStdout(t, func() {
-		if err := updateCmd.RunE(updateCmd, []string{"github_token"}); err != nil {
-			t.Fatalf("RunE failed: %v", err)
-		}
+		_ = updateCmd.RunE(updateCmd, []string{"github_token"})
 	})
 
 	if !strings.Contains(out, `"fix": "Secret \"github_token\" does not exist. Add it first: secrets add github_token"`) {

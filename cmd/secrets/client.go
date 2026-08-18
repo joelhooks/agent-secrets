@@ -22,7 +22,13 @@ func rpcCall(socketPath, method string, params interface{}) (*types.RPCResponse,
 	defer cancel()
 
 	if socketPath == "" {
-		cfg, err := config.Load()
+		var cfg *config.Config
+		var err error
+		if configPath != "" {
+			cfg, err = config.LoadFrom(configPath)
+		} else {
+			cfg, err = config.Load()
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config: %w", err)
 		}

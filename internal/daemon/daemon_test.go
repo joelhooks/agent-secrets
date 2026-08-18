@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/user"
 	"testing"
 	"time"
 
@@ -104,6 +105,154 @@ func TestDaemonStartStop(t *testing.T) {
 
 	if d.IsRunning() {
 		t.Error("expected daemon to be stopped")
+	}
+}
+
+func TestDaemonRejectsWritableSocketDirectory(t *testing.T) {
+	for _, mode := range []os.FileMode{0770, 0707} {
+		t.Run(fmt.Sprintf("mode-%o", mode), func(t *testing.T) {
+			tempDir := t.TempDir()
+			socketDir := tempDir + "/run"
+			if err := os.Mkdir(socketDir, mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(socketDir, mode); err != nil {
+				t.Fatal(err)
+			}
+			cfg := config.DefaultConfig()
+			cfg.Directory = tempDir
+			cfg.SocketPath = socketDir + "/unsafe.sock"
+			cfg.IdentityPath = tempDir + "/identity.age"
+			cfg.SecretsPath = tempDir + "/secrets.age"
+			cfg.AuditPath = tempDir + "/audit.log"
+			cfg.LeasesPath = tempDir + "/leases.json"
+
+			d, err := NewDaemon(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := d.Start(); err == nil {
+				d.Stop()
+				t.Fatalf("Start() accepted writable socket directory mode %o", mode)
+			}
+		})
+	}
+}
+
+func TestDaemonStartUsesConfiguredSocketMode(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := config.DefaultConfig()
+	cfg.Directory = tempDir
+	cfg.SocketPath = tempDir + "/group.sock"
+	cfg.IdentityPath = tempDir + "/identity.age"
+	cfg.SecretsPath = tempDir + "/secrets.age"
+	cfg.AuditPath = tempDir + "/audit.log"
+	cfg.LeasesPath = tempDir + "/leases.json"
+	cfg.SocketMode = "0660"
+	current, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err := user.LookupGroupId(current.Gid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.SocketGroup = group.Name
+
+	d, err := NewDaemon(cfg)
+	if err != nil {
+		t.Fatalf("NewDaemon failed: %v", err)
+	}
+	if err := d.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer d.Stop()
+
+	info, err := os.Stat(cfg.SocketPath)
+	if err != nil {
+		t.Fatalf("stat socket: %v", err)
+	}
+	if info.Mode().Perm() != 0660 {
+		t.Fatalf("socket permissions = %o, want 0660", info.Mode().Perm())
+	}
+}
+
+func TestDaemonRestartWritesAcknowledgementThenSignals(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := config.DefaultConfig()
+	cfg.Directory = tempDir
+	cfg.SocketPath = tempDir + "/restart.sock"
+	cfg.IdentityPath = tempDir + "/identity.age"
+	cfg.SecretsPath = tempDir + "/secrets.age"
+	cfg.AuditPath = tempDir + "/audit.log"
+	cfg.LeasesPath = tempDir + "/leases.json"
+
+	d, err := NewDaemon(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signaled := make(chan struct{})
+	d.restartSignal = func() { close(signaled) }
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Stop()
+
+	conn, err := net.Dial("unix", cfg.SocketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	request := types.RPCRequest{JSONRPC: "2.0", Method: MethodDaemonRestart, Params: DaemonRestartParams{}, ID: 1}
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		t.Fatal(err)
+	}
+	var response types.RPCResponse
+	if err := json.NewDecoder(conn).Decode(&response); err != nil {
+		t.Fatalf("restart acknowledgement was not readable: %v", err)
+	}
+	if response.Error != nil {
+		t.Fatalf("restart response error: %v", response.Error)
+	}
+	select {
+	case <-signaled:
+	case <-time.After(time.Second):
+		t.Fatal("restart signal was not emitted after acknowledgement")
+	}
+}
+
+func TestDaemonRestartWriteFailureReleasesReservation(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := config.DefaultConfig()
+	cfg.Directory = tempDir
+	cfg.SocketPath = tempDir + "/unused.sock"
+	cfg.IdentityPath = tempDir + "/identity.age"
+	cfg.SecretsPath = tempDir + "/secrets.age"
+	cfg.AuditPath = tempDir + "/audit.log"
+	cfg.LeasesPath = tempDir + "/leases.json"
+
+	d, err := NewDaemon(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.auditLogger.Close()
+	signaled := false
+	d.restartSignal = func() { signaled = true }
+	server, client := net.Pipe()
+	d.wg.Add(1)
+	go d.handleConnection(server)
+	request := types.RPCRequest{JSONRPC: "2.0", Method: MethodDaemonRestart, Params: DaemonRestartParams{}, ID: 1}
+	if err := json.NewEncoder(client).Encode(request); err != nil {
+		t.Fatal(err)
+	}
+	client.Close()
+	d.wg.Wait()
+
+	if signaled {
+		t.Fatal("restart was signaled after response write failure")
+	}
+	if _, err := os.Stat(d.restartGuard.path); !os.IsNotExist(err) {
+		t.Fatalf("restart reservation marker remains after write failure: %v", err)
 	}
 }
 

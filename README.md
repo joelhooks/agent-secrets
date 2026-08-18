@@ -161,7 +161,7 @@ secrets lease github_token --json
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         CLI (cobra)                         │
-│   init | add | lease | revoke | audit | status              │
+│   init | add | lease | revoke | audit | status | daemon     │
 └─────────────────────────┬───────────────────────────────────┘
                           │ Unix Socket (JSON-RPC)
 ┌─────────────────────────▼───────────────────────────────────┐
@@ -279,6 +279,15 @@ secrets status
 }
 ```
 
+### `secrets daemon restart`
+Gracefully restart a daemon managed by launchd, systemd, or another `KeepAlive` supervisor.
+
+```bash
+secrets daemon restart
+```
+
+The command requests shutdown over the authenticated Unix socket, then waits for a fresh daemon instance. If the daemon cannot answer RPC, use the host's restricted break-glass service restart.
+
 ### `secrets env`
 Generate `.env` file from `.secrets.json` config. Perfect for agentic workflows where secrets need to be loaded into a project environment.
 
@@ -390,6 +399,8 @@ Config stored at `~/.agent-secrets/config.json`:
 {
   "directory": "/home/user/.agent-secrets",
   "socket_path": "/home/user/.agent-secrets/agent-secrets.sock",
+  "socket_mode": "0600",
+  "socket_group": "",
   "default_lease_ttl": "1h",
   "max_lease_ttl": "24h",
   "rotation_timeout": "30s",
@@ -406,6 +417,16 @@ Config stored at `~/.agent-secrets/config.json`:
   }
 }
 ```
+
+`secrets serve --config <path>` loads an explicit daemon config. A partial client config can point Joel's CLI at a service-owned socket without exposing the store:
+
+```json
+{
+  "socket_path": "/Users/Shared/joelclaw/run/agent-secrets.sock"
+}
+```
+
+For service-account deployments, keep the store and age identity `0700`/`0600` under the service account. Grant clients access only through a dedicated group-owned socket such as mode `0660`. Do not use a broad group such as `staff`.
 
 ## Agent Integration
 

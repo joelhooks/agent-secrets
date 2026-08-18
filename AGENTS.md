@@ -68,6 +68,7 @@ agent-secrets/
 | `secrets revoke <id>` | Revoke specific lease |
 | `secrets revoke --all` | KILLSWITCH: revoke all leases |
 | `secrets status` | Show daemon status and active leases |
+| `secrets daemon restart` | Ask a supervised daemon to exit and wait for its replacement |
 | `secrets audit` | View append-only audit log |
 | `secrets env` | Generate .env file from .secrets.json config |
 | `secrets exec -- <cmd>` | Run command with secrets loaded, auto-cleanup |
@@ -217,6 +218,8 @@ secrets exec -- ./deploy.sh production
 - **Leases have mandatory TTL** — max 24h by default
 - **Killswitch exists** — `revoke --all` for emergencies
 - **Audit log is append-only** — tampering is detectable
+- **Service-account deployment** — keep the store private to the service account; grant clients access only to a group-owned Unix socket
+- **Routine restart is RPC-driven** — `secrets daemon restart` exits cleanly so launchd/systemd can replace the process without broad sudo access
 
 ## Contact
 

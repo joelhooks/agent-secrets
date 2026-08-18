@@ -23,8 +23,10 @@ Use --background to run as a background process.`,
 		const commandName = "secrets serve"
 		background, _ := cmd.Flags().GetBool("background")
 
-		// Load config
-		cfg := config.DefaultConfig()
+		cfg, err := loadServeConfig()
+		if err != nil {
+			return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to load config: %w", err)))
+		}
 
 		// Create and start daemon
 		d, err := daemon.NewDaemonWithOptions(cfg, skipPermissionCheck)
@@ -74,6 +76,13 @@ Use --background to run as a background process.`,
 		}))
 		return nil
 	},
+}
+
+func loadServeConfig() (*config.Config, error) {
+	if configPath != "" {
+		return config.LoadFrom(configPath)
+	}
+	return config.Load()
 }
 
 func init() {

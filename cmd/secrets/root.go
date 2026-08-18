@@ -58,6 +58,7 @@ audit logging, rotation hooks, and killswitch capabilities for AI agents.`,
 				{Name: "exec", Description: "Run command with secrets as env vars", Usage: "secrets exec -- <command>"},
 				{Name: "cleanup", Description: "Remove expired lease files", Usage: "secrets cleanup"},
 				{Name: "serve", Description: "Start the daemon", Usage: "secrets serve"},
+				{Name: "daemon", Description: "Manage the supervised daemon", Usage: "secrets daemon restart"},
 				{Name: "self-update", Description: "Update to latest version", Usage: "secrets self-update"},
 			},
 		}
@@ -116,6 +117,7 @@ func init() {
 	rootCmd.AddCommand(execCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(selfUpdateCmd)
+	rootCmd.AddCommand(daemonCmd)
 }
 
 func Execute() {

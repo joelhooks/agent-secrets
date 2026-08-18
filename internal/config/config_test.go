@@ -94,6 +94,33 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestSocketFileMode(t *testing.T) {
+	cfg := DefaultConfig()
+	if got, err := cfg.SocketFileMode(); err != nil || got.Perm() != 0600 {
+		t.Fatalf("SocketFileMode() = %v, %v; want 0600", got, err)
+	}
+
+	cfg.SocketMode = "0660"
+	cfg.SocketGroup = "joelclaw-secrets"
+	if got, err := cfg.SocketFileMode(); err != nil || got.Perm() != 0660 {
+		t.Fatalf("SocketFileMode() = %v, %v; want 0660", got, err)
+	}
+
+	cfg.SocketMode = "0660"
+	cfg.SocketGroup = ""
+	if _, err := cfg.SocketFileMode(); err == nil {
+		t.Fatal("SocketFileMode() accepted 0660 without socket_group")
+	}
+
+	cfg.SocketGroup = "joelclaw-secrets"
+	for _, mode := range []string{"nope", "0666", "0777"} {
+		cfg.SocketMode = mode
+		if _, err := cfg.SocketFileMode(); err == nil {
+			t.Fatalf("SocketFileMode() expected invalid mode error for %q", mode)
+		}
+	}
+}
+
 func TestConfigSaveLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -101,6 +128,8 @@ func TestConfigSaveLoad(t *testing.T) {
 	cfg.Directory = tmpDir
 	cfg.DefaultLeaseTTL = 2 * time.Hour
 	cfg.MaxLeaseTTL = 48 * time.Hour
+	cfg.SocketMode = "0660"
+	cfg.SocketGroup = "joelclaw-secrets"
 
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -127,6 +156,12 @@ func TestConfigSaveLoad(t *testing.T) {
 	}
 	if loaded.MaxLeaseTTL != cfg.MaxLeaseTTL {
 		t.Errorf("MaxLeaseTTL = %v, want %v", loaded.MaxLeaseTTL, cfg.MaxLeaseTTL)
+	}
+	if loaded.SocketMode != "0660" {
+		t.Errorf("SocketMode = %q, want 0660", loaded.SocketMode)
+	}
+	if loaded.SocketGroup != "joelclaw-secrets" {
+		t.Errorf("SocketGroup = %q, want joelclaw-secrets", loaded.SocketGroup)
 	}
 }
 

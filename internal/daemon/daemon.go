@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/audit"
@@ -37,8 +41,10 @@ type Daemon struct {
 	otelEmitter      *otel.Emitter
 
 	// Shutdown coordination
-	done chan struct{}
-	wg   sync.WaitGroup
+	done          chan struct{}
+	wg            sync.WaitGroup
+	restartGuard  *restartGuard
+	restartSignal func()
 }
 
 // NewDaemon creates a new daemon with the provided configuration.
@@ -88,12 +94,8 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 	// Initialize killswitch
 	ks := killswitch.NewKillswitch(leaseManager, rotationExecutor, st, auditLogger)
 
-	// Create handler
-	handler := NewHandler(st, leaseManager, rotationExecutor, ks, auditLogger)
-
-	return &Daemon{
+	d := &Daemon{
 		cfg:              cfg,
-		handler:          handler,
 		store:            st,
 		leaseManager:     leaseManager,
 		rotationExecutor: rotationExecutor,
@@ -101,7 +103,28 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 		auditLogger:      auditLogger,
 		otelEmitter:      otelEmitter,
 		done:             make(chan struct{}),
-	}, nil
+		restartGuard:     newRestartGuard(cfg.Directory),
+		restartSignal: func() {
+			_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+		},
+	}
+	d.handler = NewHandler(st, leaseManager, rotationExecutor, ks, auditLogger, RestartControl{
+		Reserve: d.reserveRestart,
+		Release: d.releaseRestart,
+	})
+	return d, nil
+}
+
+func (d *Daemon) reserveRestart() error {
+	return d.restartGuard.Reserve()
+}
+
+func (d *Daemon) releaseRestart() error {
+	return d.restartGuard.Release()
+}
+
+func (d *Daemon) signalRestart() {
+	d.restartSignal()
 }
 
 // Start starts the daemon and begins listening on the Unix socket.
@@ -110,6 +133,16 @@ func (d *Daemon) Start() error {
 	if d.running {
 		d.mu.Unlock()
 		return types.ErrDaemonAlreadyRunning
+	}
+
+	parentInfo, err := os.Stat(filepath.Dir(d.cfg.SocketPath))
+	if err != nil {
+		d.mu.Unlock()
+		return fmt.Errorf("failed to inspect socket directory: %w", err)
+	}
+	if parentInfo.Mode().Perm()&0022 != 0 {
+		d.mu.Unlock()
+		return fmt.Errorf("socket directory must not be writable by group or others: %s", filepath.Dir(d.cfg.SocketPath))
 	}
 
 	// Remove existing socket file if present
@@ -125,11 +158,11 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to listen on socket: %w", err)
 	}
 
-	// Set socket permissions to 0600 (owner only)
-	if err := os.Chmod(d.cfg.SocketPath, 0600); err != nil {
+	if err := applySocketOwnership(d.cfg); err != nil {
 		listener.Close()
+		_ = os.Remove(d.cfg.SocketPath)
 		d.mu.Unlock()
-		return fmt.Errorf("failed to set socket permissions: %w", err)
+		return err
 	}
 
 	d.listener = listener
@@ -154,6 +187,31 @@ func (d *Daemon) Start() error {
 	d.wg.Add(1)
 	go d.acceptLoop()
 
+	return nil
+}
+
+func applySocketOwnership(cfg *config.Config) error {
+	if cfg.SocketGroup != "" {
+		group, err := user.LookupGroup(cfg.SocketGroup)
+		if err != nil {
+			return fmt.Errorf("failed to resolve socket group %q: %w", cfg.SocketGroup, err)
+		}
+		gid, err := strconv.Atoi(group.Gid)
+		if err != nil {
+			return fmt.Errorf("invalid gid %q for socket group %q: %w", group.Gid, cfg.SocketGroup, err)
+		}
+		if err := os.Chown(cfg.SocketPath, -1, gid); err != nil {
+			return fmt.Errorf("failed to set socket group %q: %w", cfg.SocketGroup, err)
+		}
+	}
+
+	mode, err := cfg.SocketFileMode()
+	if err != nil {
+		return fmt.Errorf("failed to parse socket mode: %w", err)
+	}
+	if err := os.Chmod(cfg.SocketPath, mode); err != nil {
+		return fmt.Errorf("failed to set socket permissions: %w", err)
+	}
 	return nil
 }
 
@@ -294,10 +352,18 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 			return
 		}
 
-		// Write response
+		restartAccepted := req.Method == MethodDaemonRestart && resp.Error == nil
+
+		// Write response before triggering process shutdown so the client receives
+		// an acknowledgement and can wait for the supervised replacement.
 		if err := encoder.Encode(resp); err != nil {
-			// Connection error, close and return
+			if restartAccepted {
+				_ = d.releaseRestart()
+			}
 			return
+		}
+		if restartAccepted {
+			d.signalRestart()
 		}
 	}
 

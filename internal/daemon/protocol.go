@@ -5,19 +5,20 @@ import "time"
 
 // JSON-RPC method names
 const (
-	MethodInit      = "secrets.init"
-	MethodAdd       = "secrets.add"
-	MethodUpdate    = "secrets.update"
-	MethodGet       = "secrets.get"
-	MethodDelete    = "secrets.delete"
-	MethodList      = "secrets.list"
-	MethodLease     = "secrets.lease"
-	MethodRevoke    = "secrets.revoke"
-	MethodRevokeAll = "secrets.revokeAll"
-	MethodRotate    = "secrets.rotate"
-	MethodAudit     = "secrets.audit"
-	MethodStatus    = "secrets.status"
-	MethodHealth    = "secrets.health"
+	MethodInit          = "secrets.init"
+	MethodAdd           = "secrets.add"
+	MethodUpdate        = "secrets.update"
+	MethodGet           = "secrets.get"
+	MethodDelete        = "secrets.delete"
+	MethodList          = "secrets.list"
+	MethodLease         = "secrets.lease"
+	MethodRevoke        = "secrets.revoke"
+	MethodRevokeAll     = "secrets.revokeAll"
+	MethodRotate        = "secrets.rotate"
+	MethodAudit         = "secrets.audit"
+	MethodStatus        = "secrets.status"
+	MethodHealth        = "secrets.health"
+	MethodDaemonRestart = "daemon.restart"
 )
 
 // InitParams are parameters for secrets.init
@@ -171,6 +172,15 @@ type StatusParams struct {
 }
 
 // StatusResult is the result of secrets.status (uses types.DaemonStatus)
+
+// DaemonRestartParams are parameters for daemon.restart.
+type DaemonRestartParams struct{}
+
+// DaemonRestartResult acknowledges restart before the process exits.
+type DaemonRestartResult struct {
+	Accepted bool   `json:"accepted"`
+	Message  string `json:"message"`
+}
 
 // HealthParams are parameters for secrets.health
 type HealthParams struct {

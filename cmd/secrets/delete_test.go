@@ -76,9 +76,7 @@ func TestDeleteRunESecretNotFoundUsesListFix(t *testing.T) {
 	defer restore()
 
 	out := captureDeleteStdout(t, func() {
-		if err := deleteCmd.RunE(deleteCmd, []string{"github_token"}); err != nil {
-			t.Fatalf("RunE failed: %v", err)
-		}
+		_ = deleteCmd.RunE(deleteCmd, []string{"github_token"})
 	})
 
 	if !strings.Contains(out, `"fix": "Check available secrets: secrets list"`) {

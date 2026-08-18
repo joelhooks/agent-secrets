@@ -21,6 +21,13 @@ type Handler struct {
 	rotationExecutor *rotation.Executor
 	killswitch       *killswitch.Killswitch
 	auditLogger      *audit.Logger
+	restartReserve   func() error
+	restartRelease   func() error
+}
+
+type RestartControl struct {
+	Reserve func() error
+	Release func() error
 }
 
 // NewHandler creates a new RPC handler with all required dependencies.
@@ -30,14 +37,20 @@ func NewHandler(
 	re *rotation.Executor,
 	ks *killswitch.Killswitch,
 	al *audit.Logger,
+	restart ...RestartControl,
 ) *Handler {
-	return &Handler{
+	handler := &Handler{
 		store:            st,
 		leaseManager:     lm,
 		rotationExecutor: re,
 		killswitch:       ks,
 		auditLogger:      al,
 	}
+	if len(restart) > 0 {
+		handler.restartReserve = restart[0].Reserve
+		handler.restartRelease = restart[0].Release
+	}
+	return handler
 }
 
 // HandleRequest dispatches an RPC request to the appropriate handler method.
@@ -133,6 +146,13 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 		} else {
 			resp.Result = result
 		}
+	case MethodDaemonRestart:
+		result, err := h.handleDaemonRestart()
+		if err != nil {
+			resp.Error = types.RPCErrorFromError(err)
+		} else {
+			resp.Result = result
+		}
 	default:
 		resp.Error = &types.RPCError{
 			Code:    types.RPCMethodNotFound,
@@ -141,6 +161,29 @@ func (h *Handler) HandleRequest(req *types.RPCRequest) *types.RPCResponse {
 	}
 
 	return resp
+}
+
+func (h *Handler) handleDaemonRestart() (*DaemonRestartResult, error) {
+	if h.restartReserve == nil || h.restartRelease == nil {
+		return nil, fmt.Errorf("daemon restart is unavailable")
+	}
+
+	if err := h.restartReserve(); err != nil {
+		return nil, err
+	}
+
+	entry := audit.NewEntry(types.ActionDaemonRestart, true).
+		WithDetails("graceful restart requested over RPC").
+		Build()
+	if err := h.auditLogger.Log(entry); err != nil {
+		_ = h.restartRelease()
+		return nil, fmt.Errorf("failed to audit daemon restart: %w", err)
+	}
+
+	return &DaemonRestartResult{
+		Accepted: true,
+		Message:  "restart accepted; the supervisor will start a fresh daemon",
+	}, nil
 }
 
 // handleInit initializes the store if it doesn't exist.

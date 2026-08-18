@@ -65,6 +65,61 @@ func setupTestHandler(t *testing.T) (*Handler, *config.Config, func()) {
 	return handler, cfg, cleanup
 }
 
+func TestHandleDaemonRestartReservesAndEnforcesCooldown(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	reserved := false
+	handler.restartReserve = func() error {
+		if reserved {
+			return fmt.Errorf("daemon restart is already pending")
+		}
+		reserved = true
+		return nil
+	}
+	handler.restartRelease = func() error {
+		reserved = false
+		return nil
+	}
+	request := &types.RPCRequest{JSONRPC: "2.0", Method: MethodDaemonRestart, ID: 1}
+	response := handler.HandleRequest(request)
+
+	if response.Error != nil {
+		t.Fatalf("restart response error: %v", response.Error)
+	}
+	result, ok := response.Result.(*DaemonRestartResult)
+	if !ok || !result.Accepted || !reserved {
+		t.Fatalf("restart result = %#v, reserved=%v; want accepted reservation", response.Result, reserved)
+	}
+
+	second := handler.HandleRequest(request)
+	if second.Error == nil || !strings.Contains(second.Error.Message, "already pending") {
+		t.Fatalf("second restart = %#v, want pending error", second)
+	}
+}
+
+func TestHandleDaemonRestartReleasesReservationWhenAuditFails(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	released := false
+	handler.restartReserve = func() error { return nil }
+	handler.restartRelease = func() error {
+		released = true
+		return nil
+	}
+	if err := handler.auditLogger.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response := handler.HandleRequest(&types.RPCRequest{JSONRPC: "2.0", Method: MethodDaemonRestart, ID: 1})
+	if response.Error == nil || !strings.Contains(response.Error.Message, "failed to audit") {
+		t.Fatalf("restart response = %#v, want audit error", response)
+	}
+	if !released {
+		t.Fatal("failed audit did not release restart reservation")
+	}
+}
+
 func TestHandleInit(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()

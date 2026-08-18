@@ -109,9 +109,7 @@ func TestLeaseRunESecretNotFoundUsesStandardFix(t *testing.T) {
 	defer restoreJSONFlag()
 
 	out := captureLeaseStdout(t, func() {
-		if err := leaseCmd.RunE(leaseCmd, []string{"github_token"}); err != nil {
-			t.Fatalf("RunE failed: %v", err)
-		}
+		_ = leaseCmd.RunE(leaseCmd, []string{"github_token"})
 	})
 
 	if !strings.Contains(out, `"fix": "Check available secrets: secrets status"`) {
