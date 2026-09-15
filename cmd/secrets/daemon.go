@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const daemonRestartTimeout = 30 * time.Second
+
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Manage the supervised agent-secrets daemon",
@@ -44,7 +46,7 @@ var daemonRestartCmd = &cobra.Command{
 			return output.PrintFail(output.Error(commandName, fmt.Errorf("daemon did not accept restart")))
 		}
 
-		deadline := time.Now().Add(15 * time.Second)
+		deadline := time.Now().Add(daemonRestartTimeout)
 		for time.Now().Before(deadline) {
 			time.Sleep(150 * time.Millisecond)
 			after, statusErr := daemonStatus()
@@ -63,7 +65,7 @@ var daemonRestartCmd = &cobra.Command{
 
 		return output.PrintFail(output.ErrorWithFix(
 			commandName,
-			fmt.Errorf("restart was accepted but no fresh daemon became healthy within 15s"),
+			fmt.Errorf("restart was accepted but no fresh daemon became healthy within %s", daemonRestartTimeout),
 			"Use the host's break-glass service restart",
 		))
 	},
