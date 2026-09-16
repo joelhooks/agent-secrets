@@ -20,6 +20,7 @@ type Manager struct {
 	leases      map[string]*types.Lease
 	cfg         *config.Config
 	auditLogger *audit.Logger
+	logAudit    func(*types.AuditEntry) error
 	otelEmitter *otel.Emitter
 
 	// Cleanup loop control
@@ -33,6 +34,7 @@ func NewManager(cfg *config.Config, auditLogger *audit.Logger, otelEmitter ...*o
 		leases:      make(map[string]*types.Lease),
 		cfg:         cfg,
 		auditLogger: auditLogger,
+		logAudit:    auditLogger.Log,
 		cleanupDone: make(chan struct{}),
 		cleanupStop: make(chan struct{}),
 	}
@@ -230,25 +232,24 @@ func (m *Manager) List() []*types.Lease {
 // CleanupExpired removes expired leases and logs expirations.
 func (m *Manager) CleanupExpired() {
 	m.mu.Lock()
-	var expired []string
+	expired := make([]*types.Lease, 0)
 	for id, lease := range m.leases {
 		if !lease.Revoked && IsExpired(lease) {
-			expired = append(expired, id)
-
-			entry := audit.NewEntry(types.ActionLeaseExpire, true).
-				WithSecret(lease.SecretName).
-				WithClient(lease.ClientID).
-				WithLease(id).
-				Build()
-			_ = m.auditLogger.Log(entry)
+			leaseCopy := *lease
+			expired = append(expired, &leaseCopy)
+			delete(m.leases, id)
 		}
 	}
-
-	// Remove expired leases
-	for _, id := range expired {
-		delete(m.leases, id)
-	}
 	m.mu.Unlock()
+
+	for _, lease := range expired {
+		entry := audit.NewEntry(types.ActionLeaseExpire, true).
+			WithSecret(lease.SecretName).
+			WithClient(lease.ClientID).
+			WithLease(lease.ID).
+			Build()
+		_ = m.logAudit(entry)
+	}
 
 	if len(expired) > 0 {
 		_ = m.Save()
