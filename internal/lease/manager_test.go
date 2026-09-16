@@ -304,6 +304,57 @@ func TestCleanupExpired(t *testing.T) {
 	}
 }
 
+func TestCleanupExpiredDoesNotHoldLeaseLockDuringAudit(t *testing.T) {
+	mgr, _ := setupTestManager(t)
+
+	_, err := mgr.Acquire("test-secret", "client-1", 1*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Acquire() failed: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	logStarted := make(chan struct{})
+	releaseLog := make(chan struct{})
+	mgr.logAudit = func(*types.AuditEntry) error {
+		close(logStarted)
+		<-releaseLog
+		return nil
+	}
+
+	cleanupDone := make(chan struct{})
+	go func() {
+		mgr.CleanupExpired()
+		close(cleanupDone)
+	}()
+
+	select {
+	case <-logStarted:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup did not reach audit logging")
+	}
+
+	listDone := make(chan []*types.Lease, 1)
+	go func() {
+		listDone <- mgr.List()
+	}()
+
+	select {
+	case active := <-listDone:
+		if len(active) != 0 {
+			t.Fatalf("List() returned %d leases during audit, want 0", len(active))
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("List() blocked behind expiration audit logging")
+	}
+
+	close(releaseLog)
+	select {
+	case <-cleanupDone:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup did not finish after audit logging resumed")
+	}
+}
+
 func TestSaveLoad(t *testing.T) {
 	mgr, tmpDir := setupTestManager(t)
 
