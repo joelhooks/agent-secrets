@@ -291,23 +291,27 @@ The command requests shutdown over the authenticated Unix socket, then waits for
 For macOS scheduling, stall diagnosis, and safe launchd configuration reloads, see [Daemon operations](docs/daemon-operations.md). Credential RPCs serving interactive clients should use `ProcessType=Interactive`, not `Background`. A plist reload must wait for the old job's removal before bootstrap.
 
 ### `secrets env`
-Generate `.env` file from `.secrets.json` config. Perfect for agentic workflows where secrets need to be loaded into a project environment.
+Write a project's secrets to an env file. `.secrets.json` supports two shapes, chosen by what the file declares.
 
 ```bash
-# Generate .env from .secrets.json in current directory
+# Write the env file using .secrets.json in the current directory
 secrets env
 
-# Force overwrite existing .env
+# Force overwrite an existing env file
 secrets env --force
+
+# Preview what would be written, without leasing or writing
+secrets env --dry-run
 ```
 
-**How it works:**
-1. Reads `.secrets.json` from current directory
-2. Acquires leases for each secret listed
-3. Writes `KEY=value` pairs to `.env` file
+**Store-backed (`secrets` array) → writes `.env`:**
+1. Reads `.secrets.json` from the current directory (or a parent)
+2. Acquires a lease for each listed secret from the local store
+3. Writes `KEY=value` pairs to `.env` with TTL metadata headers
 4. Sets restrictive permissions (0600)
 
-**Example `.secrets.json`:**
+The file's TTL is the **earliest** lease expiry, so it never outlives the shortest-lived secret it contains.
+
 ```json
 {
   "secrets": [
@@ -329,15 +333,38 @@ secrets env --force
 }
 ```
 
-**Schema:**
-- `secrets` (required): Array of secret mappings
-  - `name` (required): Secret name in agent-secrets store
-  - `env_var` (required): Environment variable name for .env file
+**Schema (store-backed):**
+- `secrets` (required): Non-empty array of secret mappings
+  - `name` (required): Secret name in the agent-secrets store
+  - `env_var` (required): Environment variable name for the env file
   - `ttl` (optional): Custom TTL for this secret (default: 1h)
-- `client_id` (optional): Custom client ID for audit trail (default: auto-generated)
+- `client_id` (optional): Audit-trail client ID (default: hostname)
+- `env_file` (optional): Override the output filename (default: `.env`)
+
+**Provider-backed (`source`) → writes `.env.local`:**
+Pull secrets from an external provider instead of the local store.
+
+```json
+{
+  "source": "vercel",
+  "project": "my-app",
+  "scope": "development",
+  "ttl": "1h",
+  "required_vars": ["DATABASE_URL"],
+  "env_file": ".env.local"
+}
+```
+
+**Schema (provider-backed):**
+- `source` (required): Credential provider (`vercel`; `doppler` not yet implemented)
+- `project` (required): Source-specific project identifier
+- `scope` (required): `development`, `preview`, or `production`
+- `ttl` (required): Lease TTL, e.g. `1h` (max `24h`)
+- `required_vars` (optional): Sync fails if any are missing from the source
+- `env_file` (optional): Override the output filename (default: `.env.local`)
 
 ### `secrets exec`
-Run a command with secrets loaded as environment variables. Combines `secrets env` + command execution + automatic cleanup.
+Run a command with secrets loaded as environment variables. Acquires the credentials, executes the command, and releases them afterwards.
 
 ```bash
 # Run command with secrets loaded
@@ -354,19 +381,22 @@ secrets exec -- sh -c "npm install && npm test"
 ```
 
 **What it does:**
-1. Generates temporary `.env` file from `.secrets.json`
-2. Executes command with environment loaded
-3. Cleans up `.env` file when command exits (even on error)
+1. Resolves secrets using `.secrets.json` (both schemas are supported)
+2. Injects them into the subprocess environment — no secrets are written to disk
+3. For store-backed configs, revokes the acquired leases when the command exits (even on error)
 
 ### `secrets cleanup`
-Remove expired lease environment files. Run this to clean up stale `.env` files when leases have expired.
+Remove expired lease environment files. Run this to clean up stale `.env` / `.env.local` files once their leases have expired.
 
 ```bash
-# Remove all expired .env files
+# Remove all expired env files in the current directory
 secrets cleanup
 
-# Check what would be cleaned (dry-run)
-secrets cleanup --dry-run
+# Check a specific directory
+secrets cleanup --path /path/to/project
+
+# Run continuously
+secrets cleanup --watch --interval 5m
 ```
 
 ## Security Model
