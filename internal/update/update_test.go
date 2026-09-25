@@ -560,7 +560,7 @@ func TestDownloadBinary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("downloadBinary() returned error: %v", err)
 		}
-		defer os.Remove(path)
+		defer func() { _ = os.Remove(path) }()
 
 		content, err := os.ReadFile(path)
 		if err != nil {

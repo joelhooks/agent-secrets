@@ -169,8 +169,8 @@ func TestLoadNonExistent(t *testing.T) {
 	// Load should return defaults when config doesn't exist
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
 
 	cfg, err := Load()
 	if err != nil {

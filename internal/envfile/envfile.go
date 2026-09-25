@@ -28,7 +28,12 @@ func WriteWithTTL(path string, vars map[string]string, ttl time.Duration, source
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer f.Close()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = f.Close()
+		}
+	}()
 
 	expiresAt := time.Now().Add(ttl)
 
@@ -52,6 +57,14 @@ func WriteWithTTL(path string, vars map[string]string, ttl time.Duration, source
 		}
 	}
 
+	// Close explicitly rather than relying on the deferred close: an .env file
+	// carries secret values, so a failed flush must be reported instead of
+	// leaving a silently truncated file behind.
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close file: %w", err)
+	}
+	closed = true
+
 	return nil
 }
 
@@ -61,7 +74,7 @@ func Read(path string) (*EnvFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	envFile := &EnvFile{
 		Path: path,

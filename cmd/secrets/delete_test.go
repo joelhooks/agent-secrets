@@ -114,7 +114,7 @@ func startDeleteRPCServer(t *testing.T, result daemon.DeleteResult) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req types.RPCRequest
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {
@@ -149,7 +149,7 @@ func startDeleteRPCErrorServer(t *testing.T, code int, message string) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req types.RPCRequest
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {

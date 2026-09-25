@@ -73,7 +73,7 @@ func (l *Logger) Tail(n int) ([]*types.AuditEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open audit log for reading: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	entries, err := readTailEntries(f, n)
 	if err != nil {
@@ -211,7 +211,7 @@ func (l *Logger) Query(filter QueryFilter) ([]*types.AuditEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open audit log for reading: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var entries []*types.AuditEntry
 	scanner := bufio.NewScanner(f)

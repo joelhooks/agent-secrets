@@ -132,7 +132,7 @@ func TestDaemonRejectsWritableSocketDirectory(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := d.Start(); err == nil {
-				d.Stop()
+				_ = d.Stop()
 				t.Fatalf("Start() accepted writable socket directory mode %o", mode)
 			}
 		})
@@ -166,7 +166,7 @@ func TestDaemonStartUsesConfiguredSocketMode(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	info, err := os.Stat(cfg.SocketPath)
 	if err != nil {
@@ -196,13 +196,13 @@ func TestDaemonRestartWritesAcknowledgementThenSignals(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	conn, err := net.Dial("unix", cfg.SocketPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	request := types.RPCRequest{JSONRPC: "2.0", Method: MethodDaemonRestart, Params: DaemonRestartParams{}, ID: 1}
 	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestDaemonRestartWriteFailureReleasesReservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.auditLogger.Close()
+	defer func() { _ = d.auditLogger.Close() }()
 	signaled := false
 	d.restartSignal = func() { signaled = true }
 	server, client := net.Pipe()
@@ -245,7 +245,7 @@ func TestDaemonRestartWriteFailureReleasesReservation(t *testing.T) {
 	if err := json.NewEncoder(client).Encode(request); err != nil {
 		t.Fatal(err)
 	}
-	client.Close()
+	_ = client.Close()
 	d.wg.Wait()
 
 	if signaled {
@@ -279,7 +279,7 @@ func TestDaemonStartAlreadyRunning(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	// Try to start again
 	err = d.Start()
@@ -338,14 +338,14 @@ func TestDaemonHandleConnection(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	// Connect to the daemon
 	conn, err := net.Dial("unix", cfg.SocketPath)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send init request
 	req := types.RPCRequest{
@@ -399,14 +399,14 @@ func TestDaemonMultipleRequests(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	// Connect to the daemon
 	conn, err := net.Dial("unix", cfg.SocketPath)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	encoder := json.NewEncoder(conn)
 	scanner := bufio.NewScanner(conn)
@@ -462,13 +462,13 @@ func TestDaemonInvalidJSON(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	conn, err := net.Dial("unix", cfg.SocketPath)
 	if err != nil {
 		t.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send invalid JSON
 	if _, err := conn.Write([]byte("{invalid json}\n")); err != nil {
@@ -518,17 +518,17 @@ func TestDaemonConcurrentConnections(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	// Initialize store first
 	conn, _ := net.Dial("unix", cfg.SocketPath)
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 	req := types.RPCRequest{JSONRPC: "2.0", Method: MethodInit, Params: InitParams{}, ID: 0}
-	encoder.Encode(req)
+	_ = encoder.Encode(req)
 	var initResp types.RPCResponse
-	decoder.Decode(&initResp)
-	conn.Close()
+	_ = decoder.Decode(&initResp)
+	_ = conn.Close()
 
 	// Spawn multiple concurrent connections
 	const numClients = 10
@@ -541,7 +541,7 @@ func TestDaemonConcurrentConnections(t *testing.T) {
 				done <- err
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 
 			// Send a status request
 			req := types.RPCRequest{
@@ -605,7 +605,7 @@ func TestDaemonStatus(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	status := d.Status()
 	if !status.Running {
