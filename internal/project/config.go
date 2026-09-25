@@ -12,13 +12,49 @@ import (
 const (
 	// DefaultProjectConfigFile is the project-local config filename.
 	DefaultProjectConfigFile = ".secrets.json"
-	// DefaultEnvFile is the default output filename for environment variables.
+	// DefaultEnvFile is the default output filename for provider-backed ("source")
+	// configurations.
 	DefaultEnvFile = ".env.local"
+	// DefaultStoreEnvFile is the default output filename for store-backed
+	// configurations, matching the documented `secrets env` behaviour.
+	DefaultStoreEnvFile = ".env"
+	// MaxTTL is the maximum allowed TTL for any lease.
+	MaxTTL = 24 * time.Hour
 )
 
+// SecretMapping maps a secret in the local agent-secrets store to an
+// environment variable name.
+type SecretMapping struct {
+	// Name is the secret name as stored by `secrets add`.
+	Name string `json:"name"`
+	// EnvVar is the environment variable name written to the env file.
+	EnvVar string `json:"env_var"`
+	// TTL optionally overrides the default lease TTL for this secret.
+	TTL string `json:"ttl,omitempty"`
+}
+
 // ProjectConfig represents the schema for .secrets.json.
-// This file lives in project roots and defines how secrets are sourced.
+//
+// Two shapes are supported:
+//
+// Store-backed - secrets are leased from the local agent-secrets store:
+//
+//	{"secrets": [{"name": "github_token", "env_var": "GITHUB_TOKEN"}], "client_id": "deploy"}
+//
+// Provider-backed - secrets are pulled from an external source (e.g. Vercel):
+//
+//	{"source": "vercel", "project": "my-app", "scope": "development", "ttl": "1h"}
+//
+// A configuration with a non-empty "secrets" array is treated as store-backed;
+// otherwise it must specify a valid "source".
 type ProjectConfig struct {
+	// Secrets lists store-backed secret to env var mappings. When set, the
+	// source/project/scope fields are not required.
+	Secrets []SecretMapping `json:"secrets,omitempty"`
+
+	// ClientID is an optional audit-trail identifier for store-backed leases.
+	ClientID string `json:"client_id,omitempty"`
+
 	// Source is the credential provider ("vercel", "doppler", etc).
 	Source string `json:"source"`
 
@@ -52,10 +88,62 @@ func (e *ConfigError) Error() string {
 	return fmt.Sprintf("project config: %s %s", e.Field, e.Message)
 }
 
-// Validate checks if the configuration is valid.
+// IsStoreBacked reports whether the configuration leases secrets from the local
+// store, as opposed to pulling them from an external provider.
+func (c *ProjectConfig) IsStoreBacked() bool {
+	return len(c.Secrets) > 0
+}
+
+// Validate checks if the configuration is valid. The validation rules depend on
+// which shape the configuration uses.
 func (c *ProjectConfig) Validate() error {
+	if c.IsStoreBacked() {
+		return c.validateStoreBacked()
+	}
+	return c.validateSourceBacked()
+}
+
+// validateStoreBacked validates the store-backed shape ({"secrets": [...]}).
+func (c *ProjectConfig) validateStoreBacked() error {
+	seen := make(map[string]bool, len(c.Secrets))
+	for i, s := range c.Secrets {
+		if s.Name == "" {
+			return &ConfigError{Field: fmt.Sprintf("secrets[%d].name", i), Message: "cannot be empty"}
+		}
+		if s.EnvVar == "" {
+			return &ConfigError{Field: fmt.Sprintf("secrets[%d].env_var", i), Message: "cannot be empty"}
+		}
+		if seen[s.EnvVar] {
+			return &ConfigError{
+				Field:   fmt.Sprintf("secrets[%d].env_var", i),
+				Message: fmt.Sprintf("duplicate env var %q", s.EnvVar),
+			}
+		}
+		seen[s.EnvVar] = true
+
+		if s.TTL != "" {
+			if _, err := parseTTLValue(s.TTL); err != nil {
+				return &ConfigError{Field: fmt.Sprintf("secrets[%d].ttl", i), Message: err.Error()}
+			}
+		}
+	}
+
+	if c.TTL != "" {
+		if _, err := parseTTLValue(c.TTL); err != nil {
+			return &ConfigError{Field: "ttl", Message: err.Error()}
+		}
+	}
+
+	return nil
+}
+
+// validateSourceBacked validates the provider-backed shape.
+func (c *ProjectConfig) validateSourceBacked() error {
 	if c.Source == "" {
-		return &ConfigError{Field: "source", Message: "cannot be empty"}
+		return &ConfigError{
+			Field:   "source",
+			Message: "cannot be empty (or provide a non-empty \"secrets\" array)",
+		}
 	}
 
 	// Validate known sources
@@ -105,7 +193,12 @@ func (c *ProjectConfig) Validate() error {
 
 // ParseTTL parses the TTL string into a time.Duration.
 func (c *ProjectConfig) ParseTTL() (time.Duration, error) {
-	duration, err := time.ParseDuration(c.TTL)
+	return parseTTLValue(c.TTL)
+}
+
+// parseTTLValue parses and validates a TTL duration string.
+func parseTTLValue(ttl string) (time.Duration, error) {
+	duration, err := time.ParseDuration(ttl)
 	if err != nil {
 		return 0, fmt.Errorf("invalid duration format: %w", err)
 	}
@@ -115,20 +208,43 @@ func (c *ProjectConfig) ParseTTL() (time.Duration, error) {
 	}
 
 	// Enforce reasonable limits (max 24 hours)
-	maxTTL := 24 * time.Hour
-	if duration > maxTTL {
+	if duration > MaxTTL {
 		return 0, fmt.Errorf("exceeds maximum of 24h")
 	}
 
 	return duration, nil
 }
 
-// GetEnvFile returns the output env file path, using default if not specified.
+// GetEnvFile returns the output env file path, using the mode-appropriate
+// default if not specified.
 func (c *ProjectConfig) GetEnvFile() string {
 	if c.EnvFile != "" {
 		return c.EnvFile
 	}
+	if c.IsStoreBacked() {
+		return DefaultStoreEnvFile
+	}
 	return DefaultEnvFile
+}
+
+// ResolveTTL returns the lease TTL for a store-backed entry, falling back to the
+// config-level TTL and finally to fallback.
+func (c *ProjectConfig) ResolveTTL(entryTTL, fallback string) string {
+	if entryTTL != "" {
+		return entryTTL
+	}
+	if c.TTL != "" {
+		return c.TTL
+	}
+	return fallback
+}
+
+// GetClientID returns the configured audit client ID, or fallback if unset.
+func (c *ProjectConfig) GetClientID(fallback string) string {
+	if c.ClientID != "" {
+		return c.ClientID
+	}
+	return fallback
 }
 
 // Load reads a ProjectConfig from the specified path.
