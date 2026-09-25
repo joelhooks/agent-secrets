@@ -288,6 +288,8 @@ secrets daemon restart
 
 The command requests shutdown over the authenticated Unix socket, then waits for a fresh daemon instance. If the daemon cannot answer RPC, use the host's restricted break-glass service restart.
 
+For macOS scheduling, stall diagnosis, and safe launchd configuration reloads, see [Daemon operations](docs/daemon-operations.md). Credential RPCs serving interactive clients should use `ProcessType=Interactive`, not `Background`. A plist reload must wait for the old job's removal before bootstrap.
+
 ### `secrets env`
 Generate `.env` file from `.secrets.json` config. Perfect for agentic workflows where secrets need to be loaded into a project environment.
 

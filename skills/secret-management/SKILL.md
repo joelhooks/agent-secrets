@@ -1,6 +1,6 @@
 ---
 name: secret-management
-description: Portable credential management for AI agents using age encryption, session-scoped leases, auto-rotation, and killswitch. Use this skill when agents need secure, time-bounded access to API keys, tokens, or credentials without direct exposure to plaintext secrets.
+description: Portable credential management for AI agents using age encryption, session-scoped leases, auto-rotation, and killswitch. Use for time-bounded credential access, agent-secrets daemon timeouts, or supervised restart and launchd reload diagnosis.
 license: MIT
 compatibility:
   os: [linux, macos]
@@ -309,14 +309,19 @@ If heartbeat endpoint becomes unreachable for `timeout` duration, configured fai
 
 ## Troubleshooting
 
-**Daemon not running?**
-```bash
-# Check status
-secrets status
+**Daemon missing, slow, or wedged?**
 
-# Daemon auto-starts on first lease/add command
-secrets lease github_token
+Read [Daemon operations](../../docs/daemon-operations.md). Start with a timed RPC:
+
+```bash
+secrets --no-update-check --timeout 2 status
 ```
+
+A running PID and connectable socket do not prove responsiveness. Capture timing and supervisor state before recovery. Use `secrets daemon restart` for a responsive supervised daemon; otherwise use the host's approved supervisor recovery path. Never start a second daemon against a supervised store.
+
+On macOS, credential requests serving interactive clients need `ProcessType=Interactive`, not `Background`. Check the loaded job, not just the plist on disk. A configuration reload must wait for confirmed service removal after `bootout` before `bootstrap`; a fixed sleep or `kickstart` is not a reload. Preserve ownership and permissions.
+
+Verify status latency and an authorized short-lived lease after recovery. Discard the credential value. Check lease-command success before exporting output; never treat an error envelope as a credential.
 
 **Permission denied on identity file?**
 ```bash
