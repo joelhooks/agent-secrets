@@ -84,25 +84,25 @@ func SaveCache(configDir string, cache *UpdateCheckCache) error {
 
 	// Write and sync
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to sync temp file: %w", err)
 	}
 
 	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, cachePath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to rename cache file: %w", err)
 	}
 
@@ -220,7 +220,7 @@ func DoUpdate(currentVersion string) error {
 	if err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Get current executable path
 	exePath, err := os.Executable()
@@ -265,7 +265,7 @@ func getLatestRelease() (*ReleaseInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
@@ -287,7 +287,7 @@ func downloadBinary(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("download failed with status %d", resp.StatusCode)
@@ -298,13 +298,26 @@ func downloadBinary(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer tmpFile.Close()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = tmpFile.Close()
+		}
+	}()
 
 	// Copy the downloaded data
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		return "", err
 	}
+
+	// Close explicitly: the caller renames this file over the running
+	// executable, so a failed flush would install a truncated binary.
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to close downloaded binary: %w", err)
+	}
+	closed = true
 
 	return tmpFile.Name(), nil
 }

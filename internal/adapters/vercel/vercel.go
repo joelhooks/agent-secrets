@@ -62,8 +62,13 @@ func (v *VercelAdapter) Pull(project, scope string) (map[string]string, error) {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close() // Close it so vercel can write to it
-	defer os.Remove(tmpPath)
+	// Close before handing the path to the vercel CLI. Leaving it open would
+	// let vercel write to the path while our own buffer is still unflushed.
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	// Run vercel env pull
 	// vercel env pull [file] --yes --environment <scope>
@@ -130,7 +135,7 @@ func parseEnvFile(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open env file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	secrets := make(map[string]string)
 	scanner := bufio.NewScanner(file)

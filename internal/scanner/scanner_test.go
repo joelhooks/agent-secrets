@@ -71,12 +71,12 @@ func TestGitHubTokenPattern(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer os.Remove(tmpfile.Name())
+			defer func() { _ = os.Remove(tmpfile.Name()) }()
 
 			if _, err := tmpfile.WriteString(tc.content); err != nil {
 				t.Fatal(err)
 			}
-			tmpfile.Close()
+			_ = tmpfile.Close()
 
 			findings, err := scanner.ScanFile(tmpfile.Name())
 			if err != nil {
@@ -142,10 +142,10 @@ func TestAWSKeyPattern(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer os.Remove(tmpfile.Name())
+			defer func() { _ = os.Remove(tmpfile.Name()) }()
 
-			tmpfile.WriteString(tc.content)
-			tmpfile.Close()
+			_, _ = tmpfile.WriteString(tc.content)
+			_ = tmpfile.Close()
 
 			findings, err := scanner.ScanFile(tmpfile.Name())
 			if err != nil {
@@ -190,10 +190,10 @@ func TestStripeKeyPattern(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer os.Remove(tmpfile.Name())
+			defer func() { _ = os.Remove(tmpfile.Name()) }()
 
-			tmpfile.WriteString(tc.content)
-			tmpfile.Close()
+			_, _ = tmpfile.WriteString(tc.content)
+			_ = tmpfile.Close()
 
 			findings, err := scanner.ScanFile(tmpfile.Name())
 			if err != nil {
@@ -230,7 +230,7 @@ func TestScanDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpdir)
+	defer func() { _ = os.RemoveAll(tmpdir) }()
 
 	// Create test files (using patterns that test detection without triggering GitHub secret scanning)
 	files := map[string]string{
@@ -281,7 +281,7 @@ func TestExclusions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpdir)
+	defer func() { _ = os.RemoveAll(tmpdir) }()
 
 	// Create files in excluded directories
 	files := map[string]string{
@@ -327,7 +327,7 @@ func TestExclusionSubstringRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpdir)
+	defer func() { _ = os.RemoveAll(tmpdir) }()
 
 	// Create a path with "builder" (contains "build" as substring)
 	// This should NOT be excluded
@@ -374,7 +374,7 @@ func TestBinaryFileSkipping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpdir)
+	defer func() { _ = os.RemoveAll(tmpdir) }()
 
 	// Create binary file
 	binPath := filepath.Join(tmpdir, "binary.exe")

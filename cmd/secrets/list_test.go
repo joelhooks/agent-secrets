@@ -210,7 +210,7 @@ func startListRPCServer(t *testing.T, result daemon.ListResult) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req types.RPCRequest
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {

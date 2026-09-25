@@ -79,7 +79,7 @@ func TestLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Log some entries
 	entries := []*types.AuditEntry{
@@ -142,11 +142,11 @@ func TestTailLessThanN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Log 2 entries
-	logger.Log(NewEntry(types.ActionDaemonStart, true).Build())
-	logger.Log(NewEntry(types.ActionDaemonStop, true).Build())
+	_ = logger.Log(NewEntry(types.ActionDaemonStart, true).Build())
+	_ = logger.Log(NewEntry(types.ActionDaemonStop, true).Build())
 
 	// Request more than exist
 	tail, err := logger.Tail(10)
@@ -167,7 +167,7 @@ func TestTailLargeLimitDoesNotPreallocateRequestedSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	if err := logger.Log(NewEntry(types.ActionDaemonStart, true).Build()); err != nil {
 		t.Fatalf("failed to log entry: %v", err)
@@ -195,11 +195,11 @@ func TestTailDoesNotScanOversizedPrefix(t *testing.T) {
 		t.Fatalf("failed to create sparse audit log: %v", err)
 	}
 	if err := f.Truncate(prefixSize); err != nil {
-		f.Close()
+		_ = f.Close()
 		t.Fatalf("failed to create oversized prefix: %v", err)
 	}
 	if _, err := f.WriteAt([]byte{'\n'}, prefixSize-1); err != nil {
-		f.Close()
+		_ = f.Close()
 		t.Fatalf("failed to terminate oversized prefix: %v", err)
 	}
 	if err := f.Close(); err != nil {
@@ -210,7 +210,7 @@ func TestTailDoesNotScanOversizedPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	want := []*types.AuditEntry{
 		NewEntry(types.ActionSecretAdd, true).WithSecret("first").Build(),
@@ -239,7 +239,7 @@ func TestTailDoesNotScanOversizedPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reopen audit log: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	countingReader := &countingAuditTailReader{File: f}
 	if _, err := readTailEntries(countingReader, len(want)); err != nil {
 		t.Fatalf("failed to measure bounded tail: %v", err)
@@ -257,7 +257,7 @@ func TestTailSupportsEntryAcrossReadBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	largeDetails := strings.Repeat("x", 96*1024)
 	want := []*types.AuditEntry{
@@ -292,7 +292,7 @@ func TestLoggerRejectsOversizedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	entry := NewEntry(types.ActionLeaseAcquire, true).
 		WithDetails(strings.Repeat("x", int(maxAuditEntrySize))).
@@ -319,7 +319,7 @@ func TestTailReportsOversizedTerminatedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	if _, err := logger.Tail(1); err == nil || !strings.Contains(err.Error(), "exceeds maximum size") {
 		t.Fatalf("Tail() error = %v, want maximum size error", err)
@@ -343,7 +343,7 @@ func TestTailSkipsMalformedAndCrashTruncatedLines(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create logger: %v", err)
 			}
-			defer logger.Close()
+			defer func() { _ = logger.Close() }()
 
 			if err := logger.Log(NewEntry(types.ActionSecretAdd, true).WithSecret("first").Build()); err != nil {
 				t.Fatalf("failed to log first entry: %v", err)
@@ -354,7 +354,7 @@ func TestTailSkipsMalformedAndCrashTruncatedLines(t *testing.T) {
 					t.Fatalf("failed to open audit log: %v", err)
 				}
 				if _, err := f.WriteString(tt.between); err != nil {
-					f.Close()
+					_ = f.Close()
 					t.Fatalf("failed to append malformed line: %v", err)
 				}
 				if err := f.Close(); err != nil {
@@ -370,7 +370,7 @@ func TestTailSkipsMalformedAndCrashTruncatedLines(t *testing.T) {
 					t.Fatalf("failed to open audit log: %v", err)
 				}
 				if _, err := f.WriteString(tt.truncatedAt); err != nil {
-					f.Close()
+					_ = f.Close()
 					t.Fatalf("failed to append truncated fragment: %v", err)
 				}
 				if err := f.Close(); err != nil {
@@ -398,7 +398,7 @@ func TestTailSkipsOversizedCrashSuffix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	if err := logger.Log(NewEntry(types.ActionDaemonStart, true).WithSecret("valid").Build()); err != nil {
 		t.Fatalf("failed to log entry: %v", err)
@@ -428,7 +428,7 @@ func TestQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Log entries with different actions and secrets
 	now := time.Now()
@@ -505,7 +505,7 @@ func TestQueryEmptyLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	results, err := logger.Query(QueryFilter{})
 	if err != nil {
@@ -525,7 +525,7 @@ func TestConcurrentWrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Write from multiple goroutines
 	const numGoroutines = 10

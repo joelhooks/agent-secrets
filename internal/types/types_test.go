@@ -85,7 +85,7 @@ func TestUserError(t *testing.T) {
 	if ret := userErr.WithContext("socket", "/tmp/agent-secrets.sock"); ret != userErr {
 		t.Fatal("WithContext should return the same pointer for chaining")
 	}
-	userErr.WithContext("client_id", "deploy-task")
+	_ = userErr.WithContext("client_id", "deploy-task")
 
 	msg := userErr.Error()
 	for _, want := range []string{

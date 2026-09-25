@@ -44,7 +44,7 @@ func rpcCall(socketPath, method string, params interface{}) (*types.RPCResponse,
 		}
 		return nil, fmt.Errorf("failed to connect to daemon at %s: %w (is the daemon running?)", socketPath, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set deadline for all I/O operations on this connection
 	deadline, _ := ctx.Deadline()
