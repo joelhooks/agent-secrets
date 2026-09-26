@@ -216,8 +216,16 @@ func (h *Handler) handleAdd(params interface{}) (*AddResult, error) {
 	}
 
 	if err := h.store.Add(p.Name, p.Value, p.RotateVia); err != nil {
+		_ = h.auditLogger.Log(audit.NewEntry(types.ActionSecretAdd, false).
+			WithSecret(p.Name).
+			WithDetails(err.Error()).
+			Build())
 		return nil, err
 	}
+
+	_ = h.auditLogger.Log(audit.NewEntry(types.ActionSecretAdd, true).
+		WithSecret(p.Name).
+		Build())
 
 	return &AddResult{
 		Success: true,

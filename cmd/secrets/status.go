@@ -47,6 +47,12 @@ var statusCmd = &cobra.Command{
 			"secrets_count": result.SecretsCount,
 			"active_leases": result.ActiveLeases,
 		}
+		if result.StoreState != "" {
+			statusData["store_state"] = result.StoreState
+		}
+		if result.StoreWarning != "" {
+			statusData["store_warning"] = result.StoreWarning
+		}
 
 		if result.Running {
 			uptime := time.Since(result.StartedAt)

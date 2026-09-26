@@ -2,6 +2,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,12 @@ const (
 	// RequiredKeyPermissions is the expected file mode for key files (0600 = owner read/write only)
 	RequiredKeyPermissions os.FileMode = 0600
 )
+
+// ErrKeyPermissionsTooOpen reports that a key file grants access to group or
+// other. It is exported so callers can tell a permissions mismatch apart from
+// a genuine read or decrypt failure: the code on disk is fine, only its mode
+// is too permissive.
+var ErrKeyPermissionsTooOpen = errors.New("key file permissions are too open")
 
 // PermissionError represents a file permission security issue.
 type PermissionError struct {
@@ -23,7 +30,7 @@ func (e *PermissionError) Error() string {
 	return fmt.Sprintf(
 		"Error: Key file has insecure permissions\n"+
 			"  File: %s\n"+
-			"  Current: %04o (world-readable!)\n"+
+			"  Current: %04o (readable or writable by group or other)\n"+
 			"  Expected: %04o (owner read/write only)\n\n"+
 			"Fix with: chmod %04o %s",
 		e.Path,
@@ -34,9 +41,21 @@ func (e *PermissionError) Error() string {
 	)
 }
 
+// Unwrap exposes the sentinel so callers can classify this failure with
+// errors.Is instead of matching on the concrete type.
+func (e *PermissionError) Unwrap() error {
+	return ErrKeyPermissionsTooOpen
+}
+
 // ValidateKeyFilePermissions checks that a key file has secure permissions (0600).
 // Returns a PermissionError if the file has incorrect permissions.
 func ValidateKeyFilePermissions(path string) error {
+	if !permissionModeIsMeaningful() {
+		// Permission bits do not describe the real access control on this
+		// platform, so there is nothing meaningful to validate.
+		return nil
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		// File doesn't exist yet - that's fine, it will be created with correct permissions
@@ -49,8 +68,11 @@ func ValidateKeyFilePermissions(path string) error {
 	// Get the file mode (permissions)
 	mode := info.Mode().Perm()
 
-	// Check if permissions are exactly 0600
-	if mode != RequiredKeyPermissions {
+	// Reject anything readable or writable by group or other. A stricter mode
+	// such as 0400 or 0500 is fine, so this must not demand exactly 0600: doing
+	// so rejected perfectly safe files (and, on Windows, every file, because
+	// os.Stat().Mode().Perm() there reports 0666).
+	if mode&0077 != 0 {
 		return &PermissionError{
 			Path:     path,
 			Current:  mode,

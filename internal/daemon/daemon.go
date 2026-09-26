@@ -3,6 +3,7 @@ package daemon
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -34,6 +35,8 @@ type Daemon struct {
 
 	// Components
 	store            *store.Store
+	storeState       string
+	storeWarning     string
 	leaseManager     *lease.Manager
 	rotationExecutor *rotation.Executor
 	killswitch       *killswitch.Killswitch
@@ -74,12 +77,9 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 	otelEmitter := otel.NewEmitter()
 
 	// Initialize store with optional permission check skip
-	st := store.NewWithOptions(cfg, skipPermissionCheck)
-	if err := st.Load(); err != nil {
-		// If load fails, try to init
-		if err := st.Init(); err != nil {
-			return nil, fmt.Errorf("failed to initialize store: %w", err)
-		}
+	st, storeState, storeWarning, err := loadStore(cfg, skipPermissionCheck)
+	if err != nil {
+		return nil, err
 	}
 
 	// Initialize lease manager
@@ -97,6 +97,8 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 	d := &Daemon{
 		cfg:              cfg,
 		store:            st,
+		storeState:       storeState,
+		storeWarning:     storeWarning,
 		leaseManager:     leaseManager,
 		rotationExecutor: rotationExecutor,
 		killswitch:       ks,
@@ -113,6 +115,60 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 		Release: d.releaseRestart,
 	})
 	return d, nil
+}
+
+// Store states reported by the status command.
+const (
+	// StoreStateLoaded means the on-disk store was decrypted successfully.
+	StoreStateLoaded = "loaded"
+	// StoreStateInitialized means no store existed and a new one was created.
+	StoreStateInitialized = "initialized"
+)
+
+// loadStore loads the encrypted store, distinguishing a first run from a
+// failure to read an existing one.
+//
+// Only a store whose identity and secrets file are both absent may be created
+// from scratch. If either file exists, Load failed for a real reason, and
+// re-initializing would leave the daemon serving an empty store while the
+// ciphertext was still on disk — the next write would then overwrite it.
+//
+// The one recoverable case is over-permissive file modes: there the bytes on
+// disk are fine and only the mode is wrong, so the mode is tightened and the
+// store is read again instead of refusing to start.
+func loadStore(cfg *config.Config, skipPermissionCheck bool) (*store.Store, string, string, error) {
+	st := store.NewWithOptions(cfg, skipPermissionCheck)
+	err := st.Load()
+	if err == nil {
+		return st, StoreStateLoaded, "", nil
+	}
+
+	if errors.Is(err, store.ErrKeyPermissionsTooOpen) && st.HasIdentity() && st.HasSecretsFile() {
+		var permErr *store.PermissionError
+		if !errors.As(err, &permErr) {
+			return nil, "", "", fmt.Errorf("failed to load store: %w", err)
+		}
+		if chmodErr := os.Chmod(permErr.Path, store.RequiredKeyPermissions); chmodErr != nil {
+			return nil, "", "", fmt.Errorf(
+				"refusing to start: %w (and permissions could not be repaired: %v)", err, chmodErr)
+		}
+		reloaded := store.NewWithOptions(cfg, skipPermissionCheck)
+		if reloadErr := reloaded.Load(); reloadErr != nil {
+			return nil, "", "", fmt.Errorf("failed to load store: %w", reloadErr)
+		}
+		return reloaded, StoreStateLoaded, fmt.Sprintf(
+			"%s had permissions %04o and was tightened to %04o",
+			filepath.Base(permErr.Path), permErr.Current, store.RequiredKeyPermissions), nil
+	}
+
+	if st.HasIdentity() || st.HasSecretsFile() {
+		return nil, "", "", fmt.Errorf("failed to load store: %w", err)
+	}
+
+	if err := st.Init(); err != nil {
+		return nil, "", "", fmt.Errorf("failed to initialize store: %w", err)
+	}
+	return st, StoreStateInitialized, "", nil
 }
 
 func (d *Daemon) reserveRestart() error {
@@ -343,6 +399,8 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 				d.mu.RLock()
 				status.StartedAt = d.startedAt
 				status.Running = d.running
+				status.StoreState = d.storeState
+				status.StoreWarning = d.storeWarning
 				d.mu.RUnlock()
 			}
 		}
@@ -402,5 +460,7 @@ func (d *Daemon) Status() *types.DaemonStatus {
 		SecretsCount: len(secrets),
 		ActiveLeases: len(activeLeases),
 		Heartbeat:    d.cfg.Heartbeat,
+		StoreState:   d.storeState,
+		StoreWarning: d.storeWarning,
 	}
 }

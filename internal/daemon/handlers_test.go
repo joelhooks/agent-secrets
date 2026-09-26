@@ -659,6 +659,39 @@ func TestHandleStatus(t *testing.T) {
 	}
 }
 
+// TestHandleAddWritesAuditEntry covers the gap that made a lost secret
+// untraceable: adding a secret used to leave no record at all, so once the
+// store was overwritten nothing on disk showed the secret had ever existed.
+func TestHandleAddWritesAuditEntry(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	response := handler.HandleRequest(&types.RPCRequest{
+		JSONRPC: "2.0",
+		Method:  MethodAdd,
+		Params:  AddParams{Name: "mytoken", Value: "topsecret-value-1"},
+		ID:      1,
+	})
+	if response.Error != nil {
+		t.Fatalf("handleAdd failed: %v", response.Error)
+	}
+
+	entries, err := handler.auditLogger.Tail(10)
+	if err != nil {
+		t.Fatalf("failed to read audit log: %v", err)
+	}
+
+	found := false
+	for _, entry := range entries {
+		if entry.Action == types.ActionSecretAdd && entry.SecretName == "mytoken" && entry.Success {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no successful %s audit entry for \"mytoken\"; entries: %+v", types.ActionSecretAdd, entries)
+	}
+}
+
 func TestHandleRequest(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
