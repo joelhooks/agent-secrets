@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/joelhooks/agent-secrets/internal/audit"
@@ -105,7 +104,7 @@ func NewDaemonWithOptions(cfg *config.Config, skipPermissionCheck bool) (*Daemon
 		done:             make(chan struct{}),
 		restartGuard:     newRestartGuard(cfg.Directory),
 		restartSignal: func() {
-			_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+			_ = signalRestartProcess()
 		},
 	}
 	d.handler = NewHandler(st, leaseManager, rotationExecutor, ks, auditLogger, RestartControl{
