@@ -110,7 +110,7 @@ func (w *Watcher) Start(ctx context.Context) {
 	defer ticker.Stop()
 
 	// Run initial check immediately
-	w.Check()
+	_, _ = w.Check()
 
 	for {
 		select {
@@ -119,7 +119,7 @@ func (w *Watcher) Start(ctx context.Context) {
 		case <-w.stopCh:
 			return
 		case <-ticker.C:
-			w.Check()
+			_, _ = w.Check()
 		}
 	}
 }

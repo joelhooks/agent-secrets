@@ -76,7 +76,7 @@ func (e *Emitter) probe() {
 		e.mu.Unlock()
 		return
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	e.mu.Lock()
 	e.enabled = resp.StatusCode == 200
 	e.mu.Unlock()
@@ -120,7 +120,7 @@ func (e *Emitter) send(evt Event) {
 		e.mu.Unlock()
 		return
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 // EmitDaemonStart emits a daemon lifecycle start event.

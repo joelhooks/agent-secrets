@@ -73,8 +73,8 @@ func setupHeartbeatTest(t *testing.T) (*HeartbeatMonitor, *Killswitch, *store.St
 
 	cleanup := func() {
 		hm.Stop()
-		auditLogger.Close()
-		os.RemoveAll(tmpDir)
+		_ = auditLogger.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return hm, ks, st, auditLogger, cleanup

@@ -57,8 +57,8 @@ func setupTest(t *testing.T) (*Killswitch, *lease.Manager, *store.Store, *audit.
 	ks := NewKillswitch(lm, re, st, auditLogger)
 
 	cleanup := func() {
-		auditLogger.Close()
-		os.RemoveAll(tmpDir)
+		_ = auditLogger.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return ks, lm, st, auditLogger, cleanup

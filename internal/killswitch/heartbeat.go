@@ -105,7 +105,7 @@ func (h *HeartbeatMonitor) check() error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", types.ErrHeartbeatFailed, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Consider any 2xx status code as success
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

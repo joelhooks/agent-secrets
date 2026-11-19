@@ -26,7 +26,7 @@ func setupTestManager(t *testing.T) (*Manager, string) {
 	if err != nil {
 		t.Fatalf("failed to create audit logger: %v", err)
 	}
-	t.Cleanup(func() { auditLogger.Close() })
+	t.Cleanup(func() { _ = auditLogger.Close() })
 
 	mgr, err := NewManager(cfg, auditLogger)
 	if err != nil {
@@ -383,7 +383,7 @@ func TestSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create audit logger: %v", err)
 	}
-	defer auditLogger.Close()
+	defer func() { _ = auditLogger.Close() }()
 
 	mgr2, err := NewManager(cfg, auditLogger)
 	if err != nil {
@@ -435,7 +435,7 @@ func TestSaveLoadExcludesExpiredAndRevoked(t *testing.T) {
 	}
 
 	auditLogger, _ := audit.New(cfg.AuditPath)
-	defer auditLogger.Close()
+	defer func() { _ = auditLogger.Close() }()
 
 	mgr2, err := NewManager(cfg, auditLogger)
 	if err != nil {
@@ -464,7 +464,7 @@ func TestLoadNonExistentFile(t *testing.T) {
 	}
 
 	auditLogger, _ := audit.New(cfg.AuditPath)
-	defer auditLogger.Close()
+	defer func() { _ = auditLogger.Close() }()
 
 	// Should not fail if file doesn't exist
 	mgr, err := NewManager(cfg, auditLogger)

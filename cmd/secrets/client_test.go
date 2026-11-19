@@ -20,7 +20,7 @@ func TestRPCCallHonorsConfigFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		listener.Close()
+		_ = listener.Close()
 		_ = os.Remove(socket)
 	})
 
@@ -29,7 +29,7 @@ func TestRPCCallHonorsConfigFlag(t *testing.T) {
 		if acceptErr != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		var request types.RPCRequest
 		_ = json.NewDecoder(conn).Decode(&request)
 		_ = json.NewEncoder(conn).Encode(types.RPCResponse{

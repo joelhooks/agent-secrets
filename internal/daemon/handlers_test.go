@@ -59,7 +59,7 @@ func setupTestHandler(t *testing.T) (*Handler, *config.Config, func()) {
 	handler := NewHandler(st, lm, re, ks, auditLogger)
 
 	cleanup := func() {
-		auditLogger.Close()
+		_ = auditLogger.Close()
 	}
 
 	return handler, cfg, cleanup

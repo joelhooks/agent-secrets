@@ -159,7 +159,7 @@ func (d *Daemon) Start() error {
 	}
 
 	if err := applySocketOwnership(d.cfg); err != nil {
-		listener.Close()
+		_ = listener.Close()
 		_ = os.Remove(d.cfg.SocketPath)
 		d.mu.Unlock()
 		return err
@@ -227,7 +227,7 @@ func (d *Daemon) Stop() error {
 
 	// Close the listener to stop accepting new connections
 	if d.listener != nil {
-		d.listener.Close()
+		_ = d.listener.Close()
 	}
 
 	// Signal shutdown and wait for all connections to finish
@@ -290,7 +290,7 @@ func (d *Daemon) acceptLoop() {
 // Each line is expected to be a JSON-RPC request.
 func (d *Daemon) handleConnection(conn net.Conn) {
 	defer d.wg.Done()
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set a read deadline to prevent indefinite blocking
 	// Use 10s for server-side to be more generous than client default

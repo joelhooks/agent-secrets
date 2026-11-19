@@ -206,7 +206,7 @@ func startLeaseRPCServer(t *testing.T, result daemon.LeaseResult) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req types.RPCRequest
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {
@@ -241,7 +241,7 @@ func startLeaseRPCErrorServer(t *testing.T, code int, message string) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		var req types.RPCRequest
 		if err := json.NewDecoder(conn).Decode(&req); err != nil {
