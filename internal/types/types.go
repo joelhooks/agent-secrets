@@ -99,6 +99,12 @@ type DaemonStatus struct {
 	SecretsCount int              `json:"secrets_count"`
 	ActiveLeases int              `json:"active_leases"`
 	Heartbeat    *HeartbeatConfig `json:"heartbeat,omitempty"`
+	// StoreState reports how the store was loaded so that "nothing has been
+	// added yet" can be told apart from "the store could not be reloaded".
+	StoreState string `json:"store_state,omitempty"`
+	// StoreWarning explains a non-fatal store problem, such as permissions
+	// that forced the encrypted file to be read without full validation.
+	StoreWarning string `json:"store_warning,omitempty"`
 }
 
 // RPCRequest represents a JSON-RPC 2.0 request.

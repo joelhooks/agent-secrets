@@ -93,6 +93,29 @@ func (s *Store) Init() error {
 	return nil
 }
 
+// HasIdentity reports whether the store's identity file exists on disk.
+func (s *Store) HasIdentity() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return fileExists(s.cfg.IdentityPath)
+}
+
+// HasSecretsFile reports whether the store's encrypted secrets file exists on
+// disk. It answers "has this store been used before?" without decrypting
+// anything, so callers can distinguish an absent store from one that exists
+// but could not be loaded.
+func (s *Store) HasSecretsFile() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return fileExists(s.cfg.SecretsPath)
+}
+
+// fileExists reports whether path exists and is not a directory.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 // Load loads the identity and decrypts the secrets file.
 // It validates file permissions on startup unless skipPermissionCheck is set.
 func (s *Store) Load() error {
