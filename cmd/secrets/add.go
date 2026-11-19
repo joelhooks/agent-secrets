@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,14 +36,12 @@ var addCmd = &cobra.Command{
 		if value == "" {
 			stat, _ := os.Stdin.Stat()
 			if (stat.Mode() & os.ModeCharDevice) == 0 {
-				// Data is being piped in
-				scanner := bufio.NewScanner(os.Stdin)
-				if scanner.Scan() {
-					value = scanner.Text()
+				// Data is being piped in: read all of it, so multi-line values (PEM keys, JSON) survive.
+				piped, err := readPipedSecret(os.Stdin)
+				if err != nil {
+					return output.PrintFail(output.Error(commandName, err))
 				}
-				if err := scanner.Err(); err != nil {
-					return output.PrintFail(output.Error(commandName, fmt.Errorf("failed to read from stdin: %w", err)))
-				}
+				value = piped
 			} else {
 				// Interactive prompt
 				fmt.Printf("Enter secret value for '%s': ", name)
