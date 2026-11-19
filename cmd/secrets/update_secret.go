@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -118,17 +117,7 @@ func readSecretInputValue(name, fromFlag string) (string, error) {
 
 	stat, _ := os.Stdin.Stat()
 	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			if err := scanner.Err(); err != nil {
-				return "", fmt.Errorf("failed to read from stdin: %w", err)
-			}
-			return scanner.Text(), nil
-		}
-		if err := scanner.Err(); err != nil {
-			return "", fmt.Errorf("failed to read from stdin: %w", err)
-		}
-		return "", nil
+		return readPipedSecret(os.Stdin)
 	}
 
 	fmt.Printf("Enter secret value for '%s': ", name)
